@@ -30,6 +30,11 @@
   * { margin: 0; padding: 0; box-sizing: border-box; }
   html, body { height: 100%; }
   html { scrollbar-gutter: stable; }
+  /* Opt out of browser scroll-anchoring — it tries to auto-adjust scroll
+     position when content changes size near the top of the page, which
+     fights our own explicit scroll resets during view swaps (we replace a
+     very tall page with a short one right at scrollY 0). */
+  html, body { overflow-anchor: none; }
   body { background: var(--paper); color: var(--ink); font-family: 'Newsreader', serif; overflow-x: hidden; }
 
   .view {
@@ -712,6 +717,10 @@
           // the incoming one this whole time to make the crossfade a true
           // overlap.
           if (view && view !== nextView) view.classList.remove('active');
+          // One more explicit assertion after the swap itself, in case
+          // anything (scroll anchoring included) tried to nudge it during
+          // that layout change.
+          window.scrollTo(0, 0);
         }, 150);
       }, 700);
     }, 360);
