@@ -47,6 +47,15 @@ That's it — the live site reverts immediately, with no git commands needed.
 (Your git history is unaffected either way, so you can also just fix the file
 and push a new commit if you'd rather move forward than roll back.)
 
+## Note on Git contributor verification
+
+Netlify's free plan blocks auto-deploys from git pushes it doesn't recognize
+as coming from a verified account ("Unrecognized Git contributor" error). If
+this ever reappears (e.g. after re-authenticating GitHub), fix it at:
+Netlify team settings → Members → Git Contributors → Edit settings → Connect
+GitHub. This links your GitHub account to your Netlify account so future
+pushes are trusted automatically.
+
 ## Contact form
 
 The "Get in touch" form posts directly to a Google Apps Script endpoint, which
