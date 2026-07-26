@@ -424,6 +424,58 @@
   ];
 
   let currentTopic = null;
+  let suppressHistory = false;
+
+  // Flat detail slugs that don't nest under their topic in the URL, e.g.
+  // kuhdang.com/driving instead of /hobbies/driving. Add more here as needed —
+  // every topic (kuhdang.com/hobbies) and every nested topic/sub pair
+  // (kuhdang.com/hobbies/gaming) already gets a route for free from the
+  // `topics` data below (see routeFromPath).
+  const detailAliases = {
+    driving: { topic: 'hobbies', sub: 'driving' },
+    riding: { topic: 'hobbies', sub: 'driving' },
+  };
+
+  function slugForDetail(topicKey, subId) {
+    if (!subId) return topicKey;
+    const alias = Object.keys(detailAliases).find(slug => {
+      const a = detailAliases[slug];
+      return a.topic === topicKey && a.sub === subId;
+    });
+    return alias || (topicKey + '/' + subId);
+  }
+
+  function setPath(path) {
+    if (suppressHistory) return;
+    if (location.pathname !== path) history.pushState({}, '', path);
+  }
+
+  // Resolves whatever the URL currently points to and displays it directly
+  // (no click-triggered zoom/crossfade — there's no card being clicked on a
+  // fresh load or back/forward navigation), without re-pushing the same
+  // path back into history.
+  function routeFromPath() {
+    const slug = location.pathname.replace(/^\/+|\/+$/g, '');
+    suppressHistory = true;
+    try {
+      if (!slug || slug === 'home') {
+        if (!document.getElementById('view-home').classList.contains('active')) jumpToExplore();
+      } else if (detailAliases[slug]) {
+        const { topic, sub } = detailAliases[slug];
+        const s = topics[topic].sub.find(x => x.id === sub);
+        showDetail(topic, s.id, s.title, '');
+      } else if (topics[slug]) {
+        goToTopic(slug);
+      } else {
+        const [topicKey, subId] = slug.split('/');
+        const t = topics[topicKey];
+        const s = t && subId ? t.sub.find(x => x.id === subId) : null;
+        if (s) showDetail(topicKey, s.id, s.title, '');
+      }
+    } finally {
+      suppressHistory = false;
+    }
+  }
 
   // Bumped whenever a scroll animation should be cancelled — smoothScrollTo
   // checks it on every frame and bails if a newer request has come in since.
@@ -504,6 +556,7 @@
 
   function goHome() {
     showView('home');
+    setPath('/home');
     // No manual shard/visibility restoration needed — the scroll listener
     // reassembles the shatter automatically as scrollY heads back to 0,
     // whether from this jump or a manual scroll.
@@ -595,6 +648,7 @@
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById('view-home').classList.add('active');
     closeMenu();
+    setPath('/home');
     requestAnimationFrame(() => {
       const el = document.getElementById('exploreSection');
       el.scrollIntoView({ behavior: 'auto', block: 'start' });
@@ -764,6 +818,7 @@
       if (i === t.sub.length - 1 && t.sub.length % 2 === 1) b.classList.add('last');
       box.appendChild(b);
     });
+    setPath('/' + key);
     return showView('subgrid', crossfade);
   }
 
@@ -779,6 +834,7 @@
       crumb.textContent = '← HOME';
       crumb.onclick = jumpToExplore;
     }
+    setPath('/' + slugForDetail(topicKey, subId));
     return showView('detail', crossfade);
   }
 
@@ -865,9 +921,22 @@
     requestAnimationFrame(bounce);
   })();
 
+  // Restore a deep-linked path saved by 404.html (GitHub Pages has no
+  // server-side routing, so a direct request to e.g. /hobbies 404s there
+  // first — see that file), then resolve whatever the URL now points to.
+  (function restoreDeepLink() {
+    const saved = sessionStorage.redirectPath;
+    if (saved) {
+      delete sessionStorage.redirectPath;
+      if (saved !== '/') history.replaceState({}, '', saved);
+    }
+  })();
+
   buildExploreGrid();
   buildPanelNav();
   buildShardContainer();
+  routeFromPath();
+  window.addEventListener('popstate', routeFromPath);
 
   // Fade the hamburger in, and shatter the heading, as the home page scrolls
   // from hero toward the grid — both driven directly by scroll position, so

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Redirecting…</title>
+<script>
+  // GitHub Pages has no server-side routing, so a direct request to any path
+  // other than "/" (e.g. kuhdang.com/hobbies) 404s here first. Stash the
+  // intended path and bounce to the real index.html, which restores it via
+  // history.replaceState and dispatches the matching view (see
+  // restoreDeepLink/routeFromPath in index.html).
+  sessionStorage.redirectPath = location.pathname + location.search + location.hash;
+  location.replace('/');
+</script>
+</head>
+<body></body>
+</html>
