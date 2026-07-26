@@ -41,7 +41,7 @@
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
   /* ---------- HERO ---------- */
-  #heroSection { display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; height: 100dvh; z-index: 2; overflow: hidden; background: var(--paper); }
+  #heroSection { display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; height: 100dvh; height: 100lvh; z-index: 2; overflow: hidden; background: var(--paper); }
   .hero-frame { position: absolute; top: 32px; left: 32px; right: 32px; display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
   .question { font-weight: 300; font-style: italic; font-size: clamp(2.5rem, 8vw, 5.5rem); line-height: 1.1; text-align: center; transition: opacity 0.5s ease; color: var(--ink); }
   .question .mark { display: inline-block; color: var(--accent); transition: transform 0.4s ease; }
@@ -402,7 +402,7 @@
       menuBtn.style.pointerEvents = '';
       menuBtn.classList.add('visible');
     }
-    if (!crossfade) window.scrollTo(0, 0);
+    window.scrollTo(0, 0);
     closeMenu();
     return target;
   }
@@ -415,7 +415,9 @@
   function goExplore() {
     showView('home');
     requestAnimationFrame(() => {
-      document.getElementById('exploreSection').scrollIntoView({ behavior: 'smooth' });
+      const el = document.getElementById('exploreSection');
+      const target = el.getBoundingClientRect().top + window.scrollY;
+      window.scrollTo({ top: target, behavior: 'smooth' });
     });
   }
 
