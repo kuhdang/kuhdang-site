@@ -380,6 +380,24 @@
 
   let currentTopic = null;
 
+  // Custom-driven smooth scroll — avoids iOS Safari's native smooth-scroll
+  // physics, which can overshoot the target and spring back at the end.
+  function smoothScrollTo(targetY, duration = 1000) {
+    const startY = window.scrollY;
+    const diff = targetY - startY;
+    if (Math.abs(diff) < 1) return;
+    const startTime = performance.now();
+    // Pronounced slow start that ramps up to full speed, then eases to a stop —
+    // a steeper curve than plain ease-in-out cubic (t^5 vs t^3 at the front).
+    const easeInOutQuint = t => t < 0.5 ? 16 * t ** 5 : 1 - Math.pow(-2 * t + 2, 5) / 2;
+    function step(now) {
+      const progress = Math.min((now - startTime) / duration, 1);
+      window.scrollTo(0, startY + diff * easeInOutQuint(progress));
+      if (progress < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
   function showView(id, crossfade) {
     document.querySelectorAll('.view').forEach(v => { v.classList.remove('active'); v.classList.remove('entering'); v.classList.remove('prefade'); v.classList.remove('crossfading'); v.classList.remove('settled'); });
     const target = document.getElementById('view-' + id);
@@ -409,7 +427,7 @@
 
   function goHome() {
     showView('home');
-    requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'smooth' }));
+    requestAnimationFrame(() => smoothScrollTo(0));
   }
 
   function goExplore() {
@@ -417,7 +435,7 @@
     requestAnimationFrame(() => {
       const el = document.getElementById('exploreSection');
       const target = el.getBoundingClientRect().top + window.scrollY;
-      window.scrollTo({ top: target, behavior: 'smooth' });
+      smoothScrollTo(target);
     });
   }
 
