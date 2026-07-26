@@ -45,6 +45,21 @@
   .view.active { display: block; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
+  /* Subgrid/detail/contact are always their own independently-scrolling
+     panel, pinned to the viewport, whenever active — decoupled entirely from
+     the home page's own scroll position. This guarantees they start at their
+     own top no matter where the previous page was scrolled to, without
+     needing to chase/reset a shared window scroll position at the right
+     moment (only #view-home uses the document's own scroll, for the
+     continuous hero-to-grid shatter effect). */
+  .panel-view.active {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    overflow-y: auto;
+    background: var(--paper);
+  }
+
   /* ---------- HERO ---------- */
   #heroSection { display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; height: 100dvh; height: 100lvh; z-index: 2; overflow: hidden; background: var(--paper); }
   .hero-frame { position: absolute; top: 32px; left: 32px; right: 32px; display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
@@ -151,16 +166,6 @@
   .view.settled {
     opacity: 1;
     animation: none;
-  }
-  /* While crossfading in, the incoming view is pinned over the viewport (with
-     its own opaque background) so it visually overlays the outgoing view,
-     which is deliberately kept visible underneath during the transition. */
-  .view.overlaying {
-    position: fixed;
-    inset: 0;
-    z-index: 35;
-    overflow-y: auto;
-    background: var(--paper);
   }
 
   /* Phase 1: fade everything except the tapped card */
@@ -343,7 +348,7 @@
 </div>
 
 <!-- SUB-GRID -->
-<div class="view" id="view-subgrid">
+<div class="view panel-view" id="view-subgrid">
   <div class="frame">
     <a class="crumb" id="subgridCrumb">← HOME</a>
     <h1 id="subgridTitle"></h1>
@@ -353,7 +358,7 @@
 </div>
 
 <!-- DETAIL -->
-<div class="view" id="view-detail">
+<div class="view panel-view" id="view-detail">
   <div class="frame">
     <a class="crumb" id="detailCrumb"></a>
   </div>
@@ -365,7 +370,7 @@
 </div>
 
 <!-- CONTACT -->
-<div class="view" id="view-contact">
+<div class="view panel-view" id="view-contact">
   <div class="frame"></div>
   <div class="content">
     <h1 class="contact-heading">Get in touch</h1>
@@ -455,21 +460,25 @@
     // of the scroll position after we've moved on.
     cancelSmoothScroll();
     // During a crossfade, deliberately leave the outgoing view active/visible —
-    // the incoming view mounts as a fixed overlay on top of it (see .view.overlaying)
-    // so the two are actually on screen together while the fade plays out. The
-    // caller (zoomIntoCard) hides the outgoing view once the crossfade settles.
+    // the incoming view (subgrid/detail/contact) is always a fixed, independently-
+    // scrolling panel while active (see .panel-view.active), so it's on screen
+    // above the outgoing view without needing to touch document scroll at all.
+    // The caller (zoomIntoCard) hides the outgoing view once the crossfade settles.
     const previous = crossfade ? document.querySelector('.view.active') : null;
     document.querySelectorAll('.view').forEach(v => {
       if (v === previous) return;
-      v.classList.remove('active'); v.classList.remove('entering'); v.classList.remove('prefade'); v.classList.remove('crossfading'); v.classList.remove('settled'); v.classList.remove('overlaying');
+      v.classList.remove('active'); v.classList.remove('entering'); v.classList.remove('prefade'); v.classList.remove('crossfading'); v.classList.remove('settled');
     });
     const target = document.getElementById('view-' + id);
     target.classList.add('active');
+    // Always starts at its own top — meaningful for panel-views (their own
+    // independent scrollTop) and harmless for #view-home (not independently
+    // scrollable, so this is a no-op there).
+    target.scrollTop = 0;
     if (crossfade) {
-      // Mount invisibly, stacked above the outgoing view; the caller will
-      // trigger the fade-in for a true, overlapping crossfade.
+      // Mount invisibly; the caller will trigger the fade-in for a true,
+      // overlapping crossfade.
       target.classList.add('prefade');
-      target.classList.add('overlaying');
     } else {
       // Normal navigation: play the entrance animation.
       void target.offsetWidth;
@@ -485,9 +494,8 @@
       menuBtn.style.pointerEvents = '';
       menuBtn.classList.add('visible');
     }
-    // For a crossfade, the outgoing view stays visible underneath (see above),
-    // so resetting scroll here would visibly yank it to its own top mid-transition.
-    // zoomIntoCard resets scroll itself once the outgoing view is actually hidden.
+    // Panel-views are always fixed/self-scrolling, so this only actually
+    // matters when landing back on #view-home.
     if (!crossfade) window.scrollTo(0, 0);
     closeMenu();
     return target;
@@ -709,42 +717,21 @@
         grid.classList.remove('isolating');
         if (view) view.classList.remove('isolating');
         menuBtn.classList.remove('fading');
-
-        // Force scroll to 0 FIRST, while the incoming view is still pinned as
-        // a fixed overlay (position:fixed ignores scroll position entirely) —
-        // so there's zero risk of it briefly showing the wrong spot once it's
-        // switched to normal document flow below. Scrolling is also locked
-        // for a moment: tapping a card right as a flick-scroll is still
-        // decelerating can leave residual momentum scrolling on iOS that
-        // would otherwise sneak in a late correction.
-        document.documentElement.style.overflow = 'hidden';
-        window.scrollTo(0, 0);
-
-        setTimeout(() => {
-          window.scrollTo(0, 0);
-          document.documentElement.style.overflow = '';
-
-          // Only now — with scroll already confirmed at 0 — settle the
-          // incoming view into normal, stable document flow. We convert
-          // 'crossfading' into 'settled' in one step: 'settled' also carries
-          // opacity:1 + animation:none, so the page never falls back to the
-          // base .view fadeIn (which would otherwise replay and cause a
-          // second flash). 'overlaying' comes off too, taking it out of its
-          // fixed overlay now that scroll position is safe.
-          if (nextView) {
-            nextView.classList.add('settled');
-            nextView.classList.remove('crossfading');
-            nextView.classList.remove('overlaying');
-          }
-          // Only now hide the outgoing view — it's been visible underneath
-          // the incoming one this whole time to make the crossfade a true
-          // overlap.
-          if (view && view !== nextView) view.classList.remove('active');
-          // One more explicit assertion after the swap itself, in case
-          // anything (scroll anchoring included) tried to nudge it during
-          // that layout change.
-          window.scrollTo(0, 0);
-        }, 150);
+        // Settle the incoming view. It's a fixed, independently-scrolling
+        // panel the whole time it's active (see .panel-view.active), so
+        // there's no document-scroll position to fight here — it can only
+        // ever show its own top. 'settled' converts from 'crossfading' in
+        // one step: it also carries opacity:1 + animation:none, so the page
+        // never falls back to the base .view fadeIn (which would otherwise
+        // replay and cause a second flash).
+        if (nextView) {
+          nextView.classList.add('settled');
+          nextView.classList.remove('crossfading');
+        }
+        // Only now hide the outgoing view — it's been visible underneath
+        // the incoming one this whole time to make the crossfade a true
+        // overlap.
+        if (view && view !== nextView) view.classList.remove('active');
       }, 700);
     }, 360);
   }
