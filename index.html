@@ -398,36 +398,26 @@
 </div>
 
 <script>
-  // Drive the hero's height from a JS-read viewport value via a CSS var,
-  // instead of relying solely on the CSS dvh/lvh units — those have
-  // inconsistent behavior across mobile browsers (Android Chrome's
-  // address-bar/viewport-resize model in particular doesn't always match iOS
-  // Safari's), which was leaving extra, unnecessary scrollable space below
-  // the grid on Chrome. Re-reads fresh each time rather than only ever
-  // growing — an early "only grow" version of this could get stuck on an
-  // inflated initial reading with no way to correct back down, which matches
-  // what was actually happening: navigating away and back to home fixed the
-  // extra space, implying the truer value only became available later, not
-  // that it kept growing.
-  // Frozen while our own custom scroll animation (smoothScrollTo) is
-  // running, so a toolbar-hide resize event firing mid-scroll can't shift
-  // the hero's height and cause jitter/peek-through — the same failure mode
-  // that using dvh alone caused earlier. At all other times (idle, page
-  // load, after navigating) it's free to re-sync to the real value.
-  let heroVhLocked = false;
-  function setHeroVh() {
-    if (heroVhLocked) return;
-    document.documentElement.style.setProperty('--hero-vh', window.innerHeight + 'px');
-  }
-  setHeroVh();
-  window.addEventListener('resize', setHeroVh);
-  window.addEventListener('orientationchange', setHeroVh);
-  if (window.visualViewport) window.visualViewport.addEventListener('resize', setHeroVh);
-  window.addEventListener('load', setHeroVh);
-  // Chrome mobile's toolbar sometimes hasn't finished settling into its
-  // final state by the time the above fire — catch it a moment later too.
-  setTimeout(setHeroVh, 400);
-  setTimeout(setHeroVh, 1200);
+  // Track the largest viewport height actually observed and drive the hero's
+  // height from that via a CSS var, instead of relying solely on the CSS
+  // dvh/lvh units. Those units have inconsistent behavior across mobile
+  // browsers (Android Chrome's address-bar/viewport-resize model in
+  // particular doesn't always match iOS Safari's), which was leaving extra,
+  // unnecessary scrollable space below the grid on Chrome. This JS-tracked
+  // max is a more battle-tested cross-browser technique. Only ever grows
+  // (never shrinks back down as a toolbar re-shows), matching "largest
+  // viewport" semantics.
+  (function () {
+    let maxVh = window.innerHeight;
+    function setHeroVh() {
+      if (window.innerHeight > maxVh) maxVh = window.innerHeight;
+      document.documentElement.style.setProperty('--hero-vh', maxVh + 'px');
+    }
+    setHeroVh();
+    window.addEventListener('resize', setHeroVh);
+    window.addEventListener('orientationchange', setHeroVh);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', setHeroVh);
+  })();
 
   const topics = {
     life: { title: "26 Years on Earth", sub: [
@@ -476,18 +466,11 @@
     // Pronounced slow start that ramps up to full speed, then eases to a stop —
     // a steeper curve than plain ease-in-out cubic (t^5 vs t^3 at the front).
     const easeInOutQuint = t => t < 0.5 ? 16 * t ** 5 : 1 - Math.pow(-2 * t + 2, 5) / 2;
-    // Lock --hero-vh for the duration of this scroll — see setHeroVh above.
-    heroVhLocked = true;
     function step(now) {
-      if (myToken !== scrollAnimationToken) { heroVhLocked = false; return; } // superseded by a newer scroll
+      if (myToken !== scrollAnimationToken) return; // superseded by a newer scroll
       const progress = Math.min((now - startTime) / duration, 1);
       window.scrollTo(0, startY + diff * easeInOutQuint(progress));
-      if (progress < 1) {
-        requestAnimationFrame(step);
-      } else {
-        heroVhLocked = false;
-        setHeroVh(); // pick up any real change now that the scroll has settled
-      }
+      if (progress < 1) requestAnimationFrame(step);
     }
     requestAnimationFrame(step);
   }
@@ -544,7 +527,6 @@
     // No manual shard/visibility restoration needed — the scroll listener
     // reassembles the shatter automatically as scrollY heads back to 0,
     // whether from this jump or a manual scroll.
-    setHeroVh(); // resync hero height fresh on landing back on home
     requestAnimationFrame(() => smoothScrollTo(0));
   }
 
@@ -633,8 +615,6 @@
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById('view-home').classList.add('active');
     closeMenu();
-    setHeroVh(); // resync hero height fresh on landing back on home — this is
-                 // the actual "Home" path from the hamburger menu
     requestAnimationFrame(() => {
       const el = document.getElementById('exploreSection');
       el.scrollIntoView({ behavior: 'auto', block: 'start' });
