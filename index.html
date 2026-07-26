@@ -125,6 +125,16 @@
     opacity: 1;
     animation: none;
   }
+  /* While crossfading in, the incoming view is pinned over the viewport (with
+     its own opaque background) so it visually overlays the outgoing view,
+     which is deliberately kept visible underneath during the transition. */
+  .view.overlaying {
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    overflow-y: auto;
+    background: var(--paper);
+  }
 
   /* Phase 1: fade everything except the tapped card */
   .grid.isolating .box:not(.isolated-card) {
@@ -399,12 +409,22 @@
   }
 
   function showView(id, crossfade) {
-    document.querySelectorAll('.view').forEach(v => { v.classList.remove('active'); v.classList.remove('entering'); v.classList.remove('prefade'); v.classList.remove('crossfading'); v.classList.remove('settled'); });
+    // During a crossfade, deliberately leave the outgoing view active/visible —
+    // the incoming view mounts as a fixed overlay on top of it (see .view.overlaying)
+    // so the two are actually on screen together while the fade plays out. The
+    // caller (zoomIntoCard) hides the outgoing view once the crossfade settles.
+    const previous = crossfade ? document.querySelector('.view.active') : null;
+    document.querySelectorAll('.view').forEach(v => {
+      if (v === previous) return;
+      v.classList.remove('active'); v.classList.remove('entering'); v.classList.remove('prefade'); v.classList.remove('crossfading'); v.classList.remove('settled'); v.classList.remove('overlaying');
+    });
     const target = document.getElementById('view-' + id);
     target.classList.add('active');
     if (crossfade) {
-      // Mount invisibly; the caller will trigger the fade-in for a true crossfade.
+      // Mount invisibly, stacked above the outgoing view; the caller will
+      // trigger the fade-in for a true, overlapping crossfade.
       target.classList.add('prefade');
+      target.classList.add('overlaying');
     } else {
       // Normal navigation: play the entrance animation.
       void target.offsetWidth;
@@ -420,7 +440,10 @@
       menuBtn.style.pointerEvents = '';
       menuBtn.classList.add('visible');
     }
-    window.scrollTo(0, 0);
+    // For a crossfade, the outgoing view stays visible underneath (see above),
+    // so resetting scroll here would visibly yank it to its own top mid-transition.
+    // zoomIntoCard resets scroll itself once the outgoing view is actually hidden.
+    if (!crossfade) window.scrollTo(0, 0);
     closeMenu();
     return target;
   }
@@ -530,11 +553,14 @@
       box.style.transform = `translate(${dx}px, ${dy}px) scale(${scale})`;
       box.style.opacity = '0';
 
-      // TRUE CROSSFADE: at ~70% through the 0.5s zoom, mount the next page
-      // invisibly (prefade), then fade it in over the tail so the still-zooming
-      // card dissolves through into the incoming page.
+      let nextView = null;
+
+      // TRUE CROSSFADE: partway through the 0.5s zoom, mount the next page as a
+      // fixed overlay (prefade) above the still-visible outgoing view, then fade
+      // it in — so the incoming page is actually on screen dissolving over the
+      // still-zooming card, not just appearing after it's gone.
       setTimeout(() => {
-        const nextView = done(true); // mounts the page in prefade (opacity 0)
+        nextView = done(true); // mounts the page in prefade (opacity 0), overlaying the outgoing view
         if (nextView) {
           // Let the opacity:0 state actually paint for one frame, then on the
           // next frame flip to crossfading so the transition registers cleanly.
@@ -545,7 +571,7 @@
             });
           });
         }
-      }, 350);
+      }, 200);
 
       // Clean up the card after the crossfade completes.
       setTimeout(() => {
@@ -556,15 +582,23 @@
         grid.classList.remove('isolating');
         if (view) view.classList.remove('isolating');
         menuBtn.classList.remove('fading');
-        // Settle the view into a stable state. We convert 'crossfading' into
-        // 'settled' in one step: 'settled' also carries opacity:1 + animation:none,
-        // so the page never falls back to the base .view fadeIn (which would
-        // otherwise replay and cause a second flash).
-        const active = document.querySelector('.view.active');
-        if (active) {
-          active.classList.add('settled');
-          active.classList.remove('crossfading');
+        // Settle the incoming view into a stable, normal-flow state. We convert
+        // 'crossfading' into 'settled' in one step: 'settled' also carries
+        // opacity:1 + animation:none, so the page never falls back to the base
+        // .view fadeIn (which would otherwise replay and cause a second flash).
+        // 'overlaying' comes off too, returning it from a fixed overlay to
+        // normal document flow now that it's the only view left visible.
+        if (nextView) {
+          nextView.classList.add('settled');
+          nextView.classList.remove('crossfading');
+          nextView.classList.remove('overlaying');
         }
+        // Only now hide the outgoing view — it's been visible underneath the
+        // incoming one this whole time to make the crossfade a true overlap.
+        if (view && view !== nextView) view.classList.remove('active');
+        // Deferred from showView(): reset scroll now that the outgoing view is
+        // gone, so it never visibly snaps mid-transition while still on screen.
+        window.scrollTo(0, 0);
       }, 700);
     }, 360);
   }
