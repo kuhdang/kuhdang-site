@@ -431,12 +431,12 @@
   }
 
   function goExplore() {
-    showView('home');
-    requestAnimationFrame(() => {
-      const el = document.getElementById('exploreSection');
-      const target = el.getBoundingClientRect().top + window.scrollY;
-      smoothScrollTo(target);
-    });
+    // No showView() here — clicking the hero only ever happens while the
+    // home view is already active, so re-triggering it would just replay
+    // the view's entrance animation (a visible flash) before the scroll.
+    const el = document.getElementById('exploreSection');
+    const target = el.getBoundingClientRect().top + window.scrollY;
+    smoothScrollTo(target);
   }
 
   function jumpToExplore() {
