@@ -61,7 +61,7 @@
   }
 
   /* ---------- HERO ---------- */
-  #heroSection { display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; height: 100dvh; height: 100lvh; z-index: 2; overflow: hidden; background: var(--paper); }
+  #heroSection { display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; height: 100dvh; height: 100lvh; height: var(--hero-vh, 100lvh); z-index: 2; overflow: hidden; background: var(--paper); }
   .hero-frame { position: absolute; top: 32px; left: 32px; right: 32px; display: flex; justify-content: space-between; font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-soft); }
   .question { font-weight: 300; font-style: italic; font-size: clamp(2.5rem, 8vw, 5.5rem); line-height: 1.1; text-align: center; transition: opacity 0.5s ease; color: var(--ink); }
   .question .mark { display: inline-block; color: var(--accent); transition: transform 0.4s ease; }
@@ -398,6 +398,27 @@
 </div>
 
 <script>
+  // Track the largest viewport height actually observed and drive the hero's
+  // height from that via a CSS var, instead of relying solely on the CSS
+  // dvh/lvh units. Those units have inconsistent behavior across mobile
+  // browsers (Android Chrome's address-bar/viewport-resize model in
+  // particular doesn't always match iOS Safari's), which was leaving extra,
+  // unnecessary scrollable space below the grid on Chrome. This JS-tracked
+  // max is a more battle-tested cross-browser technique. Only ever grows
+  // (never shrinks back down as a toolbar re-shows), matching "largest
+  // viewport" semantics.
+  (function () {
+    let maxVh = window.innerHeight;
+    function setHeroVh() {
+      if (window.innerHeight > maxVh) maxVh = window.innerHeight;
+      document.documentElement.style.setProperty('--hero-vh', maxVh + 'px');
+    }
+    setHeroVh();
+    window.addEventListener('resize', setHeroVh);
+    window.addEventListener('orientationchange', setHeroVh);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', setHeroVh);
+  })();
+
   const topics = {
     life: { title: "26 Years on Earth", sub: [
       { id: 'early', title: 'The Early Years', tag: '', note: 'Where it started' },
