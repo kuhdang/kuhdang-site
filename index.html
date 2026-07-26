@@ -460,6 +460,8 @@
     try {
       if (!slug || slug === 'home') {
         if (!document.getElementById('view-home').classList.contains('active')) jumpToExplore();
+      } else if (slug === 'contact') {
+        showView('contact');
       } else if (detailAliases[slug]) {
         const { topic, sub } = detailAliases[slug];
         const s = topics[topic].sub.find(x => x.id === sub);
@@ -876,7 +878,7 @@
       const g = el.dataset.goto;
       if (g === 'hero') goHome();
       else if (g === 'explore') jumpToExplore();
-      else showView(g);
+      else { showView(g); setPath('/' + g); }
     });
   });
 
