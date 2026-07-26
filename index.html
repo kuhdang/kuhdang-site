@@ -419,9 +419,20 @@
 
   let currentTopic = null;
 
+  // Bumped whenever a scroll animation should be cancelled — smoothScrollTo
+  // checks it on every frame and bails if a newer request has come in since.
+  // Without this, a still-running scroll (e.g. the hero-to-grid auto-scroll)
+  // would keep calling scrollTo on every frame for its full duration even
+  // after the user has moved on to tap a card, fighting any later reset.
+  let scrollAnimationToken = 0;
+  function cancelSmoothScroll() {
+    scrollAnimationToken++;
+  }
+
   // Custom-driven smooth scroll — avoids iOS Safari's native smooth-scroll
   // physics, which can overshoot the target and spring back at the end.
   function smoothScrollTo(targetY, duration = 1000) {
+    const myToken = ++scrollAnimationToken;
     const startY = window.scrollY;
     const diff = targetY - startY;
     if (Math.abs(diff) < 1) return;
@@ -430,6 +441,7 @@
     // a steeper curve than plain ease-in-out cubic (t^5 vs t^3 at the front).
     const easeInOutQuint = t => t < 0.5 ? 16 * t ** 5 : 1 - Math.pow(-2 * t + 2, 5) / 2;
     function step(now) {
+      if (myToken !== scrollAnimationToken) return; // superseded by a newer scroll
       const progress = Math.min((now - startTime) / duration, 1);
       window.scrollTo(0, startY + diff * easeInOutQuint(progress));
       if (progress < 1) requestAnimationFrame(step);
@@ -438,6 +450,10 @@
   }
 
   function showView(id, crossfade) {
+    // Any navigation should kill a still-running scroll animation (e.g. the
+    // hero-to-grid auto-scroll) rather than let it keep fighting for control
+    // of the scroll position after we've moved on.
+    cancelSmoothScroll();
     // During a crossfade, deliberately leave the outgoing view active/visible —
     // the incoming view mounts as a fixed overlay on top of it (see .view.overlaying)
     // so the two are actually on screen together while the fade plays out. The
@@ -618,6 +634,13 @@
 
   // Phase 1: fade everything except the tapped card. Phase 2: zoom the card into the next page.
   function zoomIntoCard(box, done) {
+    // Kill any in-flight scroll animation the instant a card is tapped — e.g.
+    // the hero-to-grid auto-scroll, if this tap happens before it's finished.
+    // Left running, it would keep calling scrollTo on every frame for its
+    // full remaining duration, fighting the scroll reset later in this
+    // sequence and landing on the wrong part of the next page.
+    cancelSmoothScroll();
+
     const grid = box.parentElement;
     const view = box.closest('.view');
     const menuBtn = document.getElementById('menuBtn');
