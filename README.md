@@ -4,9 +4,8 @@ Live site: https://kuhdang.com
 GitHub Pages settings: https://github.com/kuhdang/kuhdang-site/settings/pages
 GitHub repo: https://github.com/kuhdang/kuhdang-site
 
-Previously hosted on Netlify — migrated to GitHub Pages on 2026-07-26. The old
-Netlify project (kuhdang-site) is still sitting there, just disconnected from
-the domain; safe to delete once you're comfortable everything's working.
+Previously hosted on Netlify — migrated to GitHub Pages on 2026-07-26. The
+Netlify project was deleted the same day; no Netlify infrastructure remains.
 
 ## How this is wired up
 
