@@ -681,23 +681,38 @@
         grid.classList.remove('isolating');
         if (view) view.classList.remove('isolating');
         menuBtn.classList.remove('fading');
-        // Settle the incoming view into a stable, normal-flow state. We convert
-        // 'crossfading' into 'settled' in one step: 'settled' also carries
-        // opacity:1 + animation:none, so the page never falls back to the base
-        // .view fadeIn (which would otherwise replay and cause a second flash).
-        // 'overlaying' comes off too, returning it from a fixed overlay to
-        // normal document flow now that it's the only view left visible.
-        if (nextView) {
-          nextView.classList.add('settled');
-          nextView.classList.remove('crossfading');
-          nextView.classList.remove('overlaying');
-        }
-        // Only now hide the outgoing view — it's been visible underneath the
-        // incoming one this whole time to make the crossfade a true overlap.
-        if (view && view !== nextView) view.classList.remove('active');
-        // Deferred from showView(): reset scroll now that the outgoing view is
-        // gone, so it never visibly snaps mid-transition while still on screen.
+
+        // Force scroll to 0 FIRST, while the incoming view is still pinned as
+        // a fixed overlay (position:fixed ignores scroll position entirely) —
+        // so there's zero risk of it briefly showing the wrong spot once it's
+        // switched to normal document flow below. Scrolling is also locked
+        // for a moment: tapping a card right as a flick-scroll is still
+        // decelerating can leave residual momentum scrolling on iOS that
+        // would otherwise sneak in a late correction.
+        document.documentElement.style.overflow = 'hidden';
         window.scrollTo(0, 0);
+
+        setTimeout(() => {
+          window.scrollTo(0, 0);
+          document.documentElement.style.overflow = '';
+
+          // Only now — with scroll already confirmed at 0 — settle the
+          // incoming view into normal, stable document flow. We convert
+          // 'crossfading' into 'settled' in one step: 'settled' also carries
+          // opacity:1 + animation:none, so the page never falls back to the
+          // base .view fadeIn (which would otherwise replay and cause a
+          // second flash). 'overlaying' comes off too, taking it out of its
+          // fixed overlay now that scroll position is safe.
+          if (nextView) {
+            nextView.classList.add('settled');
+            nextView.classList.remove('crossfading');
+            nextView.classList.remove('overlaying');
+          }
+          // Only now hide the outgoing view — it's been visible underneath
+          // the incoming one this whole time to make the crossfade a true
+          // overlap.
+          if (view && view !== nextView) view.classList.remove('active');
+        }, 150);
       }, 700);
     }, 360);
   }
