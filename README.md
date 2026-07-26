@@ -1,7 +1,5 @@
 # kuhdang.com — deploy & workflow notes
 
-<!-- auto-deploy verification test -->
-
 Live site: https://kuhdang.com
 GitHub Pages settings: https://github.com/kuhdang/kuhdang-site/settings/pages
 GitHub repo: https://github.com/kuhdang/kuhdang-site
