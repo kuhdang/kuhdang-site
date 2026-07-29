@@ -414,7 +414,8 @@
     building: { title: "What I'm Building", sub: [
       { id: 'this', title: 'This Site', tag: '', note: '' },
       { id: 'ecom', title: 'Ecom', tag: '', note: '' }
-    ]}
+    ]},
+    dangcube: { title: "dangcube", sub: [], color: '#000' }
   };
 
   const gradients = [
@@ -658,12 +659,12 @@
     });
   }
 
-  function makeBox(i, title, tag, note, onClick, img) {
+  function makeBox(i, title, tag, note, onClick, img, color) {
     const box = document.createElement('div');
     box.className = 'box';
     const photo = img
       ? `<div class="photo" style="background-image:url('${img}');background-size:cover;background-position:center;"></div>`
-      : `<div class="photo" style="background:${gradients[i % gradients.length]}"></div>`;
+      : `<div class="photo" style="background:${color || gradients[i % gradients.length]}"></div>`;
     box.innerHTML = `${photo}
       <div class="veil"></div>
       <div class="label">${tag ? `<span class="index">${tag}</span>` : ''}<span class="title">${title}</span>${note ? `<span class="note">${note}</span>` : ''}</div>`;
@@ -799,7 +800,7 @@
     const keys = Object.keys(topics);
     keys.forEach((key, i) => {
       const t = topics[key];
-      const box = makeBox(i, t.title, '', '', (cf) => goToTopic(key, cf));
+      const box = makeBox(i, t.title, '', '', (cf) => goToTopic(key, cf), null, t.color);
       if (i === keys.length - 1 && keys.length % 2 === 1) box.classList.add('last');
       grid.appendChild(box);
     });
