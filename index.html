@@ -320,6 +320,204 @@
     color: var(--ink-soft);
     letter-spacing: 0.04em;
   }
+
+  /* ---------- CUBE VIEW ("dangcube") ---------- */
+  /* Custom properties scoped to #cubeStage (not :root) so they can't leak
+     into or collide with the rest of the site's variables. */
+  #cubeStage {
+    --void: #000000;
+    --halo: 214, 228, 255;      /* soft cool white, as rgb parts */
+    --mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --s: 180px;
+    --bw: 5px;                  /* edge thickness */
+    --r: 2px;                   /* corner radius of the blurred bloom */
+
+    position: fixed;
+    inset: 0;
+    background: var(--void);
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+  }
+
+  #cubeStage #intro {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: clamp(30px, 8.6vw, 60px);
+    font-weight: 500;
+    letter-spacing: -0.045em;
+    color: #FFFFFF;
+    transition: opacity 320ms ease, transform 520ms cubic-bezier(.4, 0, .2, 1);
+  }
+  #cubeStage.started #intro {
+    opacity: 0;
+    transform: scale(.97);
+    pointer-events: none;
+  }
+  #cubeStage .blip { animation: cubeBlip 1.06s steps(1, end) infinite; }
+  @keyframes cubeBlip { 0%, 55% { opacity: 1; } 56%, 100% { opacity: 0; } }
+
+  #cubeStage #scene {
+    position: absolute;
+    inset: 0;
+    perspective: 1150px;
+    perspective-origin: 50% 47%;
+  }
+
+  #cubeStage #drop {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+    transform: translateY(-125vh);
+  }
+  #cubeStage.dropped #drop {
+    transform: translateY(0);
+    /* 2s float down — decelerating, as if caught by the field it hovers in */
+    transition: transform 2000ms cubic-bezier(.14, .8, .2, 1) 120ms;
+  }
+
+  #cubeStage #hover {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+  }
+  #cubeStage.dropped #hover { animation: cubeHover 4.8s ease-in-out 2120ms infinite; }
+  #cubeStage.flat #hover { animation: none; }
+
+  /* starts at rest so it picks up the drop without a jump */
+  @keyframes cubeHover {
+    0%   { transform: translateY(0); }
+    50%  { transform: translateY(calc(var(--s) * -.085)); }
+    100% { transform: translateY(0); }
+  }
+
+  #cubeStage #net {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: var(--s);
+    height: var(--s);
+    margin-left: calc(var(--s) / -2);
+    margin-top: calc(var(--s) / -2);
+    transform-style: preserve-3d;
+  }
+
+  #cubeStage #cube {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+    will-change: transform;
+  }
+
+  #cubeStage .hinge {
+    position: absolute;
+    width: var(--s);
+    height: var(--s);
+    transform-style: preserve-3d;
+  }
+  /* assembled: each flap folded 90deg away from the front plane */
+  #cubeStage .h-right  { left: var(--s);            top: 0;                    transform-origin: 0 50%;    transform: rotateY(90deg); }
+  #cubeStage .h-left   { left: calc(var(--s) * -1); top: 0;                    transform-origin: 100% 50%; transform: rotateY(-90deg); }
+  #cubeStage .h-top    { left: 0;                   top: calc(var(--s) * -1);  transform-origin: 50% 100%; transform: rotateX(90deg); }
+  #cubeStage .h-bottom { left: 0;                   top: var(--s);             transform-origin: 50% 0;    transform: rotateX(-90deg); }
+  #cubeStage .h-back   { left: 0;                   top: var(--s);             transform-origin: 50% 0;    transform: rotateX(-90deg); }
+
+  /* unfolded: every hinge flattens into the net */
+  #cubeStage.flat .hinge {
+    transform: rotateY(0deg) rotateX(0deg);
+    transition: transform 660ms cubic-bezier(.32, .7, .18, 1);
+  }
+  #cubeStage.flat .h-right  { transition-delay: 520ms; }
+  #cubeStage.flat .h-left   { transition-delay: 670ms; }
+  #cubeStage.flat .h-top    { transition-delay: 820ms; }
+  #cubeStage.flat .h-bottom { transition-delay: 970ms; }
+  #cubeStage.flat .h-back   { transition-delay: 1120ms; }
+
+  /* ---------- edges ---------- */
+  /* The outline is a border drawn INSIDE each face, so no part of it ever
+     crosses that face's own boundary. Two neighbouring faces each lay a strip
+     along the edge they share, meeting at right angles like the inside of a
+     folded box, and at a vertex the three corner squares close it outright.
+     The sub-pixel blur is antialiasing: 3D-transformed layers rasterise
+     without it, and those bare stair-steps read as jagged. */
+
+  #cubeStage .face, #cubeStage .cube-tile {
+    position: absolute;
+    background: rgba(var(--halo), .02);
+  }
+  #cubeStage .face { inset: 0; }
+
+  #cubeStage .wire {
+    position: absolute;
+    inset: 0;
+    border: var(--bw) solid #FFFFFF;
+    filter: blur(.7px);
+  }
+
+  /* two blurred blooms trace the same outline — no box-shadow anywhere, so the
+     falloff stays round and continuous instead of banding into a hard halo */
+  #cubeStage .face::before, #cubeStage .cube-tile::before,
+  #cubeStage .face::after,  #cubeStage .cube-tile::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+  }
+  #cubeStage .face::before, #cubeStage .cube-tile::before {
+    inset: -2px;
+    border: calc(var(--bw) + 1px) solid rgba(255, 255, 255, .8);
+    border-radius: var(--r);
+    filter: blur(7px);
+  }
+  #cubeStage .face::after, #cubeStage .cube-tile::after {
+    inset: -7px;
+    border: calc(var(--bw) + 5px) solid rgba(var(--halo), .5);
+    border-radius: calc(var(--r) + 5px);
+    filter: blur(21px);
+  }
+
+  /* ---------- hint + coda ---------- */
+
+  #cubeStage #cubeHint, #cubeStage #coda {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: max(30px, env(safe-area-inset-bottom, 0px));
+    margin: 0;
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .34);
+    opacity: 0;
+    transition: opacity 700ms ease;
+    pointer-events: none;
+  }
+  #cubeStage.hinting #cubeHint { opacity: 1; }
+  #cubeStage.titled #coda { opacity: 1; }
+
+  /* ---------- tile field ---------- */
+
+  #cubeStage #panels {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  #cubeStage .cube-tile {
+    will-change: left, top, width, height;
+  }
+
+  /* Keeps the hamburger icon visible against the cube view's black
+     background — its bars are var(--ink), tuned for the paper background
+     every other view sits on. */
+  body.dark-chrome .menu-btn span { background: #fff; }
 </style>
 </head>
 <body>
@@ -398,6 +596,338 @@
   </div>
 </div>
 
+<!-- CUBE ("dangcube") -->
+<div class="view panel-view" id="view-cube">
+  <div id="cubeStage">
+    <p id="intro">Click me<span>.</span><span>.</span><span class="blip">.</span></p>
+
+    <div id="scene">
+      <div id="drop">
+        <div id="hover">
+          <div id="net">
+            <div id="cube">
+              <div class="face f-front"></div>
+              <div class="hinge h-right"><div class="face f-right"></div></div>
+              <div class="hinge h-left"><div class="face f-left"></div></div>
+              <div class="hinge h-top"><div class="face f-top"></div></div>
+              <div class="hinge h-bottom">
+                <div class="face f-bottom"></div>
+                <div class="hinge h-back"><div class="face f-back"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p id="cubeHint">drag any direction to turn &middot; tap the cube</p>
+    <p id="coda">tap anywhere to reset</p>
+
+    <div id="panels"></div>
+  </div>
+</div>
+
+<script>
+  (() => {
+    const stage = document.getElementById('cubeStage');
+    const cube = document.getElementById('cube');
+    const net = document.getElementById('net');
+    const drop = document.getElementById('drop');
+    const panels = document.getElementById('panels');
+
+    const TILT = -15;      // opening pitch — keeps the top face slightly in view
+    const YAW_IDLE = 52;   // resting drift about the vertical axis, deg/sec
+    const PITCH_IDLE = -44;// resting drift about the horizontal axis, deg/sec
+    const ENTRY = 300;     // it comes in spinning fast and winds down to idle
+    const DAMP = 0.62;     // viscous drag, per second — lower = longer glide
+    const MAX_W = 1500;    // deg/sec ceiling on a flick
+    const WINDOW = 110;    // ms of pointer history the flick is measured over
+    const AXIS_LOCK = 7;   // px of travel before a gesture commits to an axis
+    const CUBE_T = 'cubic-bezier(.32,.7,.18,1)';
+    const M = 8, G = 8;    // panel field margin + gutter
+
+    const WIRE = '<i class="wire"></i>';
+    stage.querySelectorAll('.face').forEach(f => { f.innerHTML = WIRE; });
+
+    let S = 180;
+    let state = 'intro';   // intro -> cube -> unfolding -> field
+    let raf = 0, lastT = 0;
+
+    // Two turntables sharing the cube's centroid: yaw about the vertical axis,
+    // pitch about the horizontal one. Only ever one of them is live — whichever
+    // the user last dragged. The other holds the angle it was left at.
+    //   a = angle in deg, w = angular velocity in deg/sec, idle = resting drift
+    const AX = {
+      yaw:   { a: 24,   w: YAW_IDLE, idle: YAW_IDLE },
+      pitch: { a: TILT, w: 0,        idle: PITCH_IDLE }
+    };
+    let live = 'yaw';
+    let timers = [];
+
+    const after = (ms, fn) => timers.push(setTimeout(fn, ms));
+    const clearTimers = () => { timers.forEach(clearTimeout); timers = []; };
+
+    function sizeCube() {
+      S = Math.round(Math.min(Math.min(innerWidth, innerHeight) * 0.42, 220));
+      stage.style.setProperty('--s', S + 'px');
+    }
+
+    // #cube is the front face, so the solid hangs BEHIND it, spanning z = -S..0
+    // with its centre at -S/2. translateZ runs first (it is rightmost) and lifts
+    // that centre onto the origin, so BOTH turns afterwards are about the
+    // centroid — each axis stays dead down the middle of the cube.
+    function paint() {
+      cube.style.transform =
+        `rotateX(${AX.pitch.a}deg) rotateY(${AX.yaw.a}deg) translateZ(${S / 2}px)`;
+    }
+
+    /* ---------- motion: angular velocity under viscous drag ---------- */
+
+    function tick(t) {
+      const dt = Math.min((t - lastT) / 1000, 0.05);
+      lastT = t;
+      if (!drag.active) {
+        // only the live axis integrates; the frozen one keeps its angle and its
+        // zeroed velocity, so it stays exactly where the user left it.
+        // exponential decay toward the resting drift — a hard flick keeps
+        // spinning for seconds, a gentle nudge bleeds off almost at once
+        const ax = AX[live];
+        ax.w += (ax.idle - ax.w) * (1 - Math.exp(-DAMP * dt));
+        ax.a += ax.w * dt;
+      }
+      paint();
+      raf = requestAnimationFrame(tick);
+    }
+
+    function startSpin() {
+      if (raf) return;
+      lastT = performance.now();
+      raf = requestAnimationFrame(tick);
+    }
+    function stopSpin() { cancelAnimationFrame(raf); raf = 0; }
+
+    /* ---------- pointer ---------- */
+
+    const drag = { active: false, x: 0, y: 0, sx: 0, sy: 0, moved: 0, axis: null };
+    let history = [];   // {t, a} on the live axis — measures the release velocity
+
+    function sample(t) {
+      history.push({ t, a: AX[live].a });
+      while (history.length > 2 && t - history[0].t > WINDOW) history.shift();
+    }
+
+    // velocity across the sampling window, not the last frame — a finger that
+    // slows to a stop before lifting releases at rest, which is what it should do
+    function releaseVelocity() {
+      if (history.length < 2) return 0;
+      const a = history[0], b = history[history.length - 1];
+      const dt = (b.t - a.t) / 1000;
+      if (dt < 0.008) return 0;
+      return Math.max(-MAX_W, Math.min(MAX_W, (b.a - a.a) / dt));
+    }
+
+    // any way a gesture can end has to hand the spin back, or the cube freezes
+    // for good waiting on a pointerup that is never coming
+    function endDrag(t) {
+      if (!drag.active) return;
+      drag.active = false;
+      sample(t);
+      // the axis just dragged is the one that carries on turning; a release with
+      // no flick behind it simply hands back that axis's resting drift
+      AX[live].w = releaseVelocity() || AX[live].idle;
+    }
+
+    stage.addEventListener('pointerdown', e => {
+      drag.sx = drag.x = e.clientX;
+      drag.sy = drag.y = e.clientY;
+      drag.moved = 0;
+      drag.axis = null;
+      history = [];
+      if (state !== 'cube') return;
+      try { stage.setPointerCapture(e.pointerId); } catch (_) { /* not fatal */ }
+      drag.active = true;
+      AX.yaw.w = AX.pitch.w = 0;   // both turntables stop dead under the finger
+      sample(performance.now());
+    });
+
+    stage.addEventListener('pointermove', e => {
+      const dx = e.clientX - drag.sx, dy = e.clientY - drag.sy;
+      drag.moved = Math.max(drag.moved, Math.hypot(dx, dy));
+      if (!drag.active) return;
+
+      // a gesture commits to whichever axis it opened along and keeps it: a drag
+      // that wanders diagonally must not start bleeding into the frozen axis
+      // halfway through. Committing also makes that axis the live one, which
+      // freezes the other wherever it had got to.
+      if (!drag.axis && drag.moved >= AXIS_LOCK) {
+        drag.axis = Math.abs(dx) > Math.abs(dy) ? 'yaw' : 'pitch';
+        live = drag.axis;
+        history = [];
+        sample(performance.now());
+      }
+
+      // drag right and the front face follows right; drag down and it follows
+      // down, which tips the top toward you — hence the inverted sign on pitch
+      if (drag.axis === 'yaw')   AX.yaw.a   += (e.clientX - drag.x) * 0.42;
+      if (drag.axis === 'pitch') AX.pitch.a -= (e.clientY - drag.y) * 0.42;
+
+      drag.x = e.clientX;
+      drag.y = e.clientY;
+      if (drag.axis) sample(performance.now());
+      paint();
+    });
+
+    stage.addEventListener('pointerup', e => {
+      endDrag(performance.now());
+      if (drag.moved >= 10) return;
+
+      if (state === 'intro') reveal();
+      else if (state === 'cube' && overCube(e.clientX, e.clientY)) unfold();
+      else if (state === 'field') reset();
+    });
+
+    stage.addEventListener('pointercancel', () => endDrag(performance.now()));
+    stage.addEventListener('lostpointercapture', () => endDrag(performance.now()));
+
+    // #net is the cube's static footprint; the spinning solid sweeps wider than
+    // it, so the tap target is padded out to the swept silhouette
+    function overCube(x, y) {
+      const r = net.getBoundingClientRect();
+      const pad = S * 0.35;
+      return x > r.left - pad && x < r.right + pad && y > r.top - pad && y < r.bottom + pad;
+    }
+
+    /* ---------- act 1: it falls in spinning, and winds down into a hover ---------- */
+
+    function reveal() {
+      state = 'cube';
+      live = 'yaw';
+      AX.yaw.w = ENTRY;
+      stage.classList.add('started', 'dropped');
+      startSpin();
+      after(2700, () => {
+        if (state === 'cube') stage.classList.add('hinting');
+      });
+    }
+
+    /* ---------- act 2: the cube unfolds into its net ---------- */
+
+    function unfold() {
+      state = 'unfolding';
+      stopSpin();
+      stage.classList.remove('hinting');
+
+      // settle square to the camera on the nearest full turn of each axis, so it
+      // takes the short way round however far either one has wound up
+      const yaw = Math.round(AX.yaw.a / 360) * 360;
+      const pitch = Math.round(AX.pitch.a / 360) * 360;
+      AX.yaw.a = yaw;
+      AX.pitch.a = pitch;
+      cube.style.transition = `transform 660ms ${CUBE_T}`;
+      cube.style.transform =
+        `rotateX(${pitch}deg) rotateY(${yaw}deg) translateZ(${S / 2}px)`;
+
+      // the flat net is 3 faces wide and 4 tall — scale it to fit, recentre it
+      const k = Math.min(1, (innerHeight * 0.84) / (S * 4), (innerWidth * 0.92) / (S * 3));
+      net.style.transition = `transform 1240ms ${CUBE_T} 520ms`;
+      net.style.transform = `scale(${k}) translateY(-50%)`;
+
+      stage.classList.add('flat');
+      after(1860, toField);
+    }
+
+    /* ---------- act 3: the net becomes a field of light ---------- */
+
+    const ORDER = ['.f-top', '.f-left', '.f-front', '.f-right', '.f-bottom', '.f-back'];
+
+    function cellRect(i) {
+      const portrait = innerHeight >= innerWidth;
+      const cols = portrait ? 2 : 3;
+      const rows = portrait ? 3 : 2;
+      const w = (innerWidth - M * 2 - G * (cols - 1)) / cols;
+      const h = (innerHeight - M * 2 - G * (rows - 1)) / rows;
+      return {
+        left: M + (i % cols) * (w + G),
+        top: M + Math.floor(i / cols) * (h + G),
+        width: w,
+        height: h
+      };
+    }
+
+    function place(el, r) {
+      el.style.left = r.left + 'px';
+      el.style.top = r.top + 'px';
+      el.style.width = r.width + 'px';
+      el.style.height = r.height + 'px';
+    }
+
+    function toField() {
+      // read where each face actually sits on screen, then grow it into its cell
+      const from = ORDER.map(sel => cube.querySelector(sel).getBoundingClientRect());
+
+      drop.style.visibility = 'hidden';
+
+      const tiles = from.map(r => {
+        const el = document.createElement('div');
+        el.className = 'cube-tile';
+        el.innerHTML = WIRE;
+        place(el, r);
+        panels.appendChild(el);
+        return el;
+      });
+
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        tiles.forEach((el, i) => {
+          el.style.transition = ['left', 'top', 'width', 'height']
+            .map(p => `${p} 820ms cubic-bezier(.22,.9,.24,1) ${i * 110}ms`).join(', ');
+          place(el, cellRect(i));
+        });
+      }));
+
+      after(1560, () => {
+        state = 'field';
+        stage.classList.add('titled');
+      });
+    }
+
+    /* ---------- reset ---------- */
+
+    function reset() {
+      state = 'intro';
+      clearTimers();
+      stage.classList.remove('titled');
+
+      [...panels.children].forEach((el, i) => {
+        el.style.transition = `opacity 420ms ease ${i * 45}ms`;
+        el.style.opacity = '0';
+      });
+
+      after(720, () => {
+        panels.textContent = '';
+        stage.classList.remove('started', 'dropped', 'flat', 'hinting');
+        drop.style.visibility = '';
+        net.style.transition = 'none';
+        net.style.transform = '';
+        cube.style.transition = 'none';
+        AX.yaw.a = 24;   AX.yaw.w = YAW_IDLE;
+        AX.pitch.a = TILT; AX.pitch.w = 0;
+        live = 'yaw';
+        paint();
+        requestAnimationFrame(() => { cube.style.transition = ''; });
+      });
+    }
+
+    window.addEventListener('resize', () => {
+      if (state === 'intro') { sizeCube(); paint(); return; }
+      if (state !== 'field') return;
+      [...panels.children].forEach((el, i) => place(el, cellRect(i)));
+    });
+
+    sizeCube();
+    paint();
+  })();
+</script>
+
 <script>
   const topics = {
     life: { title: "26 Years on Earth", sub: [
@@ -463,6 +993,8 @@
         if (!document.getElementById('view-home').classList.contains('active')) jumpToExplore();
       } else if (slug === 'contact') {
         showView('contact');
+      } else if (slug === 'dangcube') {
+        showView('cube');
       } else if (detailAliases[slug]) {
         const { topic, sub } = detailAliases[slug];
         const s = topics[topic].sub.find(x => x.id === sub);
@@ -550,6 +1082,9 @@
       menuBtn.style.pointerEvents = '';
       menuBtn.classList.add('visible');
     }
+    // The cube view is full-bleed black, unlike every other view's paper
+    // background — the hamburger bars need to flip light to stay visible on it.
+    document.body.classList.toggle('dark-chrome', id === 'cube');
     // Panel-views are always fixed/self-scrolling, so this only actually
     // matters when landing back on #view-home.
     if (!crossfade) window.scrollTo(0, 0);
@@ -650,6 +1185,7 @@
   function jumpToExplore() {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById('view-home').classList.add('active');
+    document.body.classList.remove('dark-chrome');
     closeMenu();
     setPath('/home');
     requestAnimationFrame(() => {
@@ -794,13 +1330,24 @@
     }, 360);
   }
 
+  // Single source of truth for "open this topic card" — used by both the
+  // home grid and the hamburger menu's topic list, so a topic with custom
+  // behavior (like dangcube's cube view) stays consistent between them.
+  function openTopic(key, crossfade) {
+    if (key === 'dangcube') {
+      setPath('/dangcube');
+      return showView('cube', crossfade);
+    }
+    return goToTopic(key, crossfade);
+  }
+
   function buildExploreGrid() {
     const grid = document.getElementById('exploreGrid');
     grid.innerHTML = '';
     const keys = Object.keys(topics);
     keys.forEach((key, i) => {
       const t = topics[key];
-      const box = makeBox(i, t.title, '', '', (cf) => goToTopic(key, cf), null, t.color);
+      const box = makeBox(i, t.title, '', '', (cf) => openTopic(key, cf), null, t.color);
       if (i === keys.length - 1 && keys.length % 2 === 1) box.classList.add('last');
       grid.appendChild(box);
     });
@@ -855,7 +1402,7 @@
     Object.keys(topics).forEach(key => {
       const a = document.createElement('a');
       a.textContent = topics[key].title;
-      a.addEventListener('click', () => goToTopic(key));
+      a.addEventListener('click', () => openTopic(key));
       nav.appendChild(a);
     });
   }
