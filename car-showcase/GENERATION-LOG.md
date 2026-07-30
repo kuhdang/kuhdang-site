@@ -32,9 +32,15 @@ credits (balance verified unchanged at 2 before and after).
 | 3–4s | camera whips around to rear three-quarter |
 | 4–8s | settles on wing and taillight signature, car driving away, still moving |
 
-**Continuity with Act 1:** frame 0 measures SSIM 0.964 against `hero-frame.png`,
-so the loop-to-launch handoff needs no blending — the launch effectively begins
-inside Act 1's world. Same livery, grade, neon palette and rain throughout.
+> ⚠️ **OUT OF DATE — must be regenerated.** This take was built from
+> **Candidate 3**, but Act 1 has since been re-locked to **Candidate 4**. The two
+> acts now show different cars: Act 2's carries the yellow livery and "GT3 RS"
+> side text, Act 1's does not. The handoff will read as a hard cut on the car
+> itself. Regenerate from `3ee06f36…` before any build work depends on it.
+
+**Continuity with Act 1:** frame 0 measured SSIM 0.964 against the *Candidate 3*
+hero frame, so the handoff was seamless under the old pairing. That figure no
+longer applies now that Act 1 comes from Candidate 4.
 
 Because the piece is all video rather than video-into-3D, the treatment's
 planned motion-blur handoff at the close pass is no longer a seam to hide — it
@@ -58,39 +64,70 @@ re-extractable:
 
 ### `assets/hero-loop.mp4` — Act 1 hero loop
 
-Supplied by the user, who generated it **outside this session** and provided it
-directly. It was not produced by this session's MCP calls.
-
-To be accurate about provenance — which is the whole point of this file — it is
-still an AI generation. The job record shows Higgsfield `kling3_0` (pro, sound
-on) run against the Act 1 motion prompt drafted for Phase 2. It is a
-user-supplied asset, not a non-AI one.
+Generated in this session on the free-trial **unlimited** allowance — 0 credits.
+Selected after eight iterations from the Candidate 4 hero frame.
 
 | | |
 |---|---|
-| **Job ID** | `c95c74b6-1feb-46e1-9a55-26c960c8c56c` |
-| **Model** | `kling3_0`, `mode: pro`, `sound: on` |
-| **Source** | 1924 × 1076, 24 fps, 20.6 Mb/s, 8.04 s, 20.8 MB |
-| **Committed** | 1920 × 1080, CRF 23, silent, faststart — 4.4 MB |
+| **Job ID** | `64ad98d0-819a-4d0b-a841-9bd77b12bc26` (attempt 6) |
+| **Model** | `kling3_0`, `mode: pro`, `sound: on`, 8s, 16:9 |
+| **start/end image** | `3ee06f36…` — Candidate 4, both roles, for a native loop |
+| **Source** | 1920 × 1080, 24 fps, 8.04 s, 23 MB |
+| **Committed** | CRF 23, silent, faststart — 6.2 MB |
 | **Audio** | extracted to `assets/hero-loop-audio.m4a` (129 KB) |
+| **Loop seam** | SSIM 0.771 (last frame vs frame 0) |
+| **Drift profile** | 0.30–0.38 — flat, confirming the camera holds position |
 
-Both `start_image` and `end_image` were
-`c038068e-32fb-4acf-9a70-5efdfcb6023e` — Candidate 3. The hero frame was
-re-locked to match (see below), so the loop and the colour bible now agree.
+**Why attempt 6 won.** The iteration converged on six requirements: camera locked
+relative to the car, real sense of speed, minimum distance held, constant rain,
+roller-rig shake, and blur. Attempt 6 is the take that satisfies them together
+without introducing a new artifact.
 
-**Loop quality (measured, not eyeballed):** the final frame is the closest match
-to frame 0 — SSIM 0.809, falling monotonically backward through the tail
-(0.758 at t=7.96, 0.726 at t=7.92, 0.634 at t=7.71). The model converged back
-toward its start composition as instructed, so **the existing end is already the
-optimal loop point and trimming would make the seam worse.** Residual mismatch is
-mostly per-frame rain and grain randomness plus slight camera drift.
+| Attempt | Outcome |
+|---|---|
+| 1 | Camera orbited into the flank — rejected |
+| 2 | Over-corrected: entire scene frozen, car appeared parked |
+| 3 | Speed restored, framing locked, but camera too smooth |
+| 4 | Shake introduced, still moderate |
+| 5 | Strongest shake, but rain cut out away from streetlights and car colour drifted |
+| **6** | **Selected** — rain more consistent, shake held, framing and distance stable |
+| 7 | Best rain and colour of all, 21% softer, but the car oscillated forward and backward — rejected |
+| 8 | Abandoned once attempt 6 was chosen |
+
+**Two realism principles drove the prompts**, both of which also mask generative
+artifacts: the camera never closes distance on the car, because fine detail is
+where the model's weakness shows; and rain is kept heavy across frame, because it
+occludes clean surfaces and breaks up edges.
+
+**Known compromises:**
+
+- **The "GT3 RS" number plate stays legible.** It is baked into Candidate 4, so
+  the model preserves it regardless of prompt. Not fixable by prompting — it
+  needs a different hero still or a masking pass.
+- **The car reads dry rather than soaked**, most visibly in stretches away from
+  streetlights. Three separate prompts failed to change this; the model treats
+  the start image's clean bodywork as the object's identity.
+- Rain is denser near light sources than in shadow. Physically defensible, but
+  the treatment asks for streaks against dark negative space too — the planned
+  canvas rain overlay is what closes this gap, at constant density across all
+  three acts.
+
+**A note on review method:** attempt 7 was initially assessed as the strongest
+take on measurements alone. It was rejected on playback because the car
+oscillates forward and backward — an artifact invisible to both a 1 fps
+filmstrip and an SSIM drift profile, which cannot distinguish reduced motion
+from oscillating motion. Takes must be watched, not only measured.
 
 The video is stored silent by design. The audio bed runs as a separate
 continuous Web Audio layer so it survives Act 3's scroll-scrubbing — see the
 audio constraint note at the end of this file.
 
-The 20.8 MB source is intentionally not committed; it is recoverable from the
+The 23 MB source is intentionally not committed; it is recoverable from the
 job ID above.
+
+**Superseded:** an earlier Act 1 loop (`c95c74b6-1feb-46e1-9a55-26c960c8c56c`),
+supplied by the user and built from Candidate 3, was committed first and has been
+replaced by attempt 6. It remains recoverable from that job ID.
 
 ---
 
@@ -102,32 +139,29 @@ later shot art-directs back to this frame's light temperature and grade.
 
 | | |
 |---|---|
-| **Job ID** | `c038068e-32fb-4acf-9a70-5efdfcb6023e` |
+| **Job ID** | `3ee06f36-0712-4ec6-bc81-e507d4af8874` |
 | **Model** | `nano_banana_pro` (served as `nano_banana_2`) |
 | **Dimensions** | 1376 × 768 (16:9, 1k) |
 | **Cost** | 8 credits (4 candidates × 2 credits each) |
-| **Selected** | Candidate 3 of 4 |
+| **Selected** | Candidate 4 of 4 |
 
-**Why this frame:** chosen to match `assets/hero-loop.mp4`, which was generated
-from it as both `start_image` and `end_image`. Candidate 4 was the original pick
-on compositional merit, but the loop had already been built from Candidate 3, and
-keeping the delivered loop was preferred over regenerating. Consistency with the
-locked motion asset decided this, not the frame's own merits.
+**Why this frame:** the original pick on compositional merit, and restored after
+the Candidate 3 route was abandoned. The streetlight sits directly above the car
+— the loop beat the treatment specifies — the background dissolves genuinely into
+soft bokeh rather than competing detail, the wet asphalt carries long vertical
+reflection smears, and there is large clean negative space camera-left for Act 3
+stat placement. No livery, so nothing competes with the stat captions.
 
 **Known compromises, carried knowingly:**
 
-- **Invented yellow livery and side text.** Not a clean hero object. This was
-  flagged before selection as a risk to **Act 3**, where six stat captions have
-  to sit in negative space without competing — the livery graphics add visual
-  noise in exactly that register. Choosing this frame accepts that risk rather
-  than removing it, so **Act 3 stat placement must be designed around the
-  livery**, favouring the emptier camera-right road area over anything crossing
-  the car's flank.
+- **Fabricated "GT3 RS" number plate**, legible in the still and preserved
+  through every generated take. Not removable by prompting; it needs either a
+  different hero still or a masking pass in post.
+- **The car reads clean and dry** rather than rain-soaked. The model treats this
+  as the object's identity and carries it into motion, which is why three
+  separate "soaked bodywork" prompts failed to change it.
 - Not a pixel-accurate 992 GT3 RS — reads as "911-ish GT3 RS", a consistent
   limitation of current image models on exact model-year fidelity.
-- Background is busier than Candidate 4's (skyline detail, twin neon signs), so
-  it dissolves less cleanly into bokeh. Depth of field in later shots should
-  compensate.
 
 > **Poster note:** for the `<video poster>` attribute, prefer frame 0 of
 > `hero-loop.mp4` over this still. They are compositionally the same shot, but
