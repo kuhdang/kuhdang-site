@@ -27,12 +27,9 @@ user-supplied asset, not a non-AI one.
 | **Committed** | 1920 × 1080, CRF 23, silent, faststart — 4.4 MB |
 | **Audio** | extracted to `assets/hero-loop-audio.m4a` (129 KB) |
 
-> ⚠️ **Frame mismatch.** Both `start_image` and `end_image` were
-> `c038068e-32fb-4acf-9a70-5efdfcb6023e` — **Candidate 3**, not the locked hero
-> frame `assets/hero-frame.png` (Candidate 4, `3ee06f36…`). Candidate 3 carries
-> the invented yellow livery and side text. Acts 2 and 3 are meant to
-> art-direct back to the locked frame's grade, so these two assets currently
-> disagree about what the car looks like. Unresolved.
+Both `start_image` and `end_image` were
+`c038068e-32fb-4acf-9a70-5efdfcb6023e` — Candidate 3. The hero frame was
+re-locked to match (see below), so the loop and the colour bible now agree.
 
 **Loop quality (measured, not eyeballed):** the final frame is the closest match
 to frame 0 — SSIM 0.809, falling monotonically backward through the tail
@@ -58,21 +55,37 @@ later shot art-directs back to this frame's light temperature and grade.
 
 | | |
 |---|---|
-| **Job ID** | `3ee06f36-0712-4ec6-bc81-e507d4af8874` |
+| **Job ID** | `c038068e-32fb-4acf-9a70-5efdfcb6023e` |
 | **Model** | `nano_banana_pro` (served as `nano_banana_2`) |
 | **Dimensions** | 1376 × 768 (16:9, 1k) |
 | **Cost** | 8 credits (4 candidates × 2 credits each) |
-| **Selected** | Candidate 4 of 4 |
+| **Selected** | Candidate 3 of 4 |
 
-**Why this frame won:** streetlight sits directly above the car (the loop beat
-specified in the treatment); background is genuinely dissolved into soft bokeh
-rather than competing detail; long vertical reflection smears on wet asphalt;
-large clean negative space camera-left for Act 3 stat placement; cool blue-black
-shadows with warm practicals as the only saturation.
+**Why this frame:** chosen to match `assets/hero-loop.mp4`, which was generated
+from it as both `start_image` and `end_image`. Candidate 4 was the original pick
+on compositional merit, but the loop had already been built from Candidate 3, and
+keeping the delivered loop was preferred over regenerating. Consistency with the
+locked motion asset decided this, not the frame's own merits.
 
-**Known compromises:** not a pixel-accurate 992 GT3 RS — reads as "911-ish GT3
-RS", which is a consistent limitation of current image models on exact model-year
-fidelity. Carries a fabricated "GT3 RS" number plate.
+**Known compromises, carried knowingly:**
+
+- **Invented yellow livery and side text.** Not a clean hero object. This was
+  flagged before selection as a risk to **Act 3**, where six stat captions have
+  to sit in negative space without competing — the livery graphics add visual
+  noise in exactly that register. Choosing this frame accepts that risk rather
+  than removing it, so **Act 3 stat placement must be designed around the
+  livery**, favouring the emptier camera-right road area over anything crossing
+  the car's flank.
+- Not a pixel-accurate 992 GT3 RS — reads as "911-ish GT3 RS", a consistent
+  limitation of current image models on exact model-year fidelity.
+- Background is busier than Candidate 4's (skyline detail, twin neon signs), so
+  it dissolves less cleanly into bokeh. Depth of field in later shots should
+  compensate.
+
+> **Poster note:** for the `<video poster>` attribute, prefer frame 0 of
+> `hero-loop.mp4` over this still. They are compositionally the same shot, but
+> the encoded first frame matches the video exactly and avoids a visible pop on
+> playback start.
 
 **Prompt:**
 
