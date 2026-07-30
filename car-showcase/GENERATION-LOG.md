@@ -9,6 +9,67 @@ just bookkeeping).
 
 ## Locked assets
 
+### `assets/act3-drive.mp4` — Act 3 scroll-scrubbed orbit
+
+Two chained 8s clips concatenated into one 16.1s track, colour graded, and
+encoded for scrubbing. Generated free on the unlimited allowance.
+
+| | |
+|---|---|
+| **Clip 1** | `4bb6697d-8c9f-4abc-bf1a-0662c005ca8d` — rain-forward prompt |
+| **Clip 2** | `7eca9254-3631-4f9b-b20b-9c30d92a68f6` — chained from clip 1's final frame |
+| **Model** | `kling3_0`, `mode: pro`, 8s each, 16:9 |
+| **Join quality** | SSIM 0.987 between clip 1's last frame and clip 2's first |
+| **Committed** | 1920 × 1080, CRF 24, **GOP 6**, silent, faststart — 8.7 MB |
+
+**Scrub encode.** `-g 6 -keyint_min 6 -sc_threshold 0` places a keyframe every
+6 frames (0.25 s at 24 fps) so an arbitrary seek decodes at most 5 frames.
+Standard encodes place keyframes ~2 s apart, which makes scroll-scrubbing lurch
+between them instead of tracking the input. Measured alternatives: GOP 1
+(all-intra, perfect seeking) 15 MB; GOP 6 8.8 MB; GOP 12 8.1 MB. GOP 6 chosen as
+the balance — switch to GOP 1 if scrubbing feels rough in the built page.
+
+**Colour grade**, baked in at assembly:
+`eq=brightness=-0.10:contrast=1.12:saturation=0.92` plus a midtone curve. This
+exists because the car drifts from dark charcoal to silver as the camera orbits
+to side-on — three prompts failed to prevent it, moving brightness ~2%. The
+cause is lighting, not paint: a dark car seen rear-on sits in its own shadow,
+but swung side-on under streetlights it catches reflections across the whole
+flank and reads bright. The model is behaving correctly, so prompting cannot
+argue with it. The grade also usefully quiets the brake calipers and panel lines.
+
+**Beat coverage (five beats — beat 6 dropped):**
+
+| Beat | Shot | Clip |
+|---|---|---|
+| 1 | low rear three-quarter | 1 |
+| 2 | low hero angle | 1 |
+| 3 | side profile, full silhouette | 1 |
+| 4 | low front, up the nose | 2 |
+| 5 | overhead roofline and wing | 2 |
+| ~~6~~ | ~~wheel / brake caliper detail~~ | **dropped** |
+
+Beat 6 was cut deliberately. A macro on a brake caliper is where generated
+detail collapses, and it contradicts the minimum-distance rule the piece relies
+on. Six stats now spread across five beats, with the side profile carrying two.
+
+**Known compromises:**
+
+- **Clip 2 is materially weaker than clip 1.** The camera closes to near
+  full-frame, brake calipers, wheel spokes, door handles and "GT3RS" side text
+  are all crisply legible, a driver is visible in the cabin, and there is little
+  motion blur. Accepted rather than re-rolled.
+- **Chaining compounds drift.** Clip 2 inherited clip 1's silvered car and
+  lighter framing as its start image and pushed further in both directions. Any
+  future chained clip should be generated from a *graded* start frame so it
+  inherits the corrected look rather than the drifted one.
+- Rain is moderate, not torrential. Three prompt strategies were tried,
+  including restructuring to lead with rain as the subject; that helped but did
+  not reach a downpour. The canvas rain overlay is the intended fix, and gives
+  constant density across all three acts rather than per-clip variation.
+
+---
+
 ### `assets/act2-launch.mp4` — Act 2 launch and whip-around
 
 Generated in this session using the free-trial **unlimited** allowance — cost 0
