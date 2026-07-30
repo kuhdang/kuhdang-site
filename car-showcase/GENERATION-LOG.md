@@ -9,6 +9,47 @@ just bookkeeping).
 
 ## Locked assets
 
+### `assets/hero-loop.mp4` — Act 1 hero loop
+
+Supplied by the user, who generated it **outside this session** and provided it
+directly. It was not produced by this session's MCP calls.
+
+To be accurate about provenance — which is the whole point of this file — it is
+still an AI generation. The job record shows Higgsfield `kling3_0` (pro, sound
+on) run against the Act 1 motion prompt drafted for Phase 2. It is a
+user-supplied asset, not a non-AI one.
+
+| | |
+|---|---|
+| **Job ID** | `c95c74b6-1feb-46e1-9a55-26c960c8c56c` |
+| **Model** | `kling3_0`, `mode: pro`, `sound: on` |
+| **Source** | 1924 × 1076, 24 fps, 20.6 Mb/s, 8.04 s, 20.8 MB |
+| **Committed** | 1920 × 1080, CRF 23, silent, faststart — 4.4 MB |
+| **Audio** | extracted to `assets/hero-loop-audio.m4a` (129 KB) |
+
+> ⚠️ **Frame mismatch.** Both `start_image` and `end_image` were
+> `c038068e-32fb-4acf-9a70-5efdfcb6023e` — **Candidate 3**, not the locked hero
+> frame `assets/hero-frame.png` (Candidate 4, `3ee06f36…`). Candidate 3 carries
+> the invented yellow livery and side text. Acts 2 and 3 are meant to
+> art-direct back to the locked frame's grade, so these two assets currently
+> disagree about what the car looks like. Unresolved.
+
+**Loop quality (measured, not eyeballed):** the final frame is the closest match
+to frame 0 — SSIM 0.809, falling monotonically backward through the tail
+(0.758 at t=7.96, 0.726 at t=7.92, 0.634 at t=7.71). The model converged back
+toward its start composition as instructed, so **the existing end is already the
+optimal loop point and trimming would make the seam worse.** Residual mismatch is
+mostly per-frame rain and grain randomness plus slight camera drift.
+
+The video is stored silent by design. The audio bed runs as a separate
+continuous Web Audio layer so it survives Act 3's scroll-scrubbing — see the
+audio constraint note at the end of this file.
+
+The 20.8 MB source is intentionally not committed; it is recoverable from the
+job ID above.
+
+---
+
 ### `assets/hero-frame.png` — Act 1 loop point
 
 The visual bible. This frame is the `start_image` **and** `end_image` for the
