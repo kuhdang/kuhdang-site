@@ -254,6 +254,34 @@ stat placement. No livery, so nothing competes with the stat captions.
 
 ---
 
+## Delivery formats
+
+Every act ships as **VP9 WebM first, H.264 MP4 as fallback**. Chrome, Firefox
+and Edge take the WebM; Safari and iOS fall through to the MP4.
+
+| Act | MP4 | WebM | saved |
+|---|---|---|---|
+| 1 — loop | 6.1 MB | 3.9 MB | 36% |
+| 2 — launch | 6.1 MB | 3.4 MB | 44% |
+| 3 — drive | 8.7 MB | 7.4 MB | 15% |
+
+Act 3 saves least because its GOP-6 scrub encode forces frequent keyframes,
+which limits how much inter-frame compression either codec can do. That is the
+cost of smooth scrubbing and it is worth paying.
+
+## Testing notes
+
+Two environment quirks cost real debugging time and will bite again:
+
+- **The bundled Chromium has no H.264.** `canPlayType('avc1…')` returns empty and
+  MP4s fail with `DEMUXER_ERROR_NO_SUPPORTED_STREAMS`. Video playback can only be
+  verified through the WebM path locally. Not a page bug.
+- **`python3 -m http.server` does not support HTTP Range.** Without range
+  requests a video reports `seekable: [0,0]`, and every `currentTime` assignment
+  is silently ignored — no throw, no error, the playhead simply never moves.
+  Scrubbing cannot be tested on it. Use a range-capable server; GitHub Pages
+  serves ranges correctly.
+
 ## Reference — model costs (preflighted, not estimated)
 
 | Model | Config | Credits |
