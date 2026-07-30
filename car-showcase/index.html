@@ -313,39 +313,58 @@
   /* ============================================================
      INPUT PROFILE
      A mouse wheel emits coarse discrete deltas; a trackpad emits fine
-     continuous ones. Mapping either straight onto currentTime gives two
-     completely different experiences from identical code. We instead give
-     the wheel a *longer* runway (more scroll distance per second of video,
-     so each notch advances less) and lean on the eased playhead below to
-     smooth what remains.
+     continuous ones. Rather than guess, we measure the first real wheel
+     event and size the scroll runway so that ONE NOTCH ADVANCES EXACTLY
+     ONE FRAME. That is what makes wheel scrubbing feel like stepping
+     through film instead of jumping between positions.
      ============================================================ */
-  var coarse = matchMedia('(hover:hover) and (pointer:fine)').matches;
   var isTouch = matchMedia('(hover:none)').matches || ('ontouchstart' in window);
-  document.documentElement.style.setProperty('--scrub-vh', isTouch ? '520' : '760');
 
-  /* Detect a real mouse wheel vs a trackpad and stretch the runway further.
-     Wheel events arrive as large, integer, uniformly-signed deltas; trackpad
-     gestures are small and fractional. One sample is enough to tell. */
-  var wheelProfiled = false;
-  window.addEventListener('wheel', function(e){
-    if (wheelProfiled) return;
-    var d = Math.abs(e.deltaY);
-    if (d >= 50 && d % 1 === 0){
-      wheelProfiled = true;
-      document.documentElement.style.setProperty('--scrub-vh','900');
-    } else if (d > 0){
-      wheelProfiled = true;
+  var FPS = 24;                 /* all three acts are encoded at 24fps */
+  var frameCount = 0;
+  var wheelPx = 100;            /* measured from the first wheel event */
+  var isWheel = false;
+  var wheelSeen = false;
+
+  function sizeRunway(){
+    if (!frameCount) return;
+    if (isWheel){
+      /* one notch : one frame */
+      runway.style.height = (frameCount * wheelPx + window.innerHeight) + 'px';
+    } else {
+      runway.style.height = '';                       /* fall back to CSS */
+      document.documentElement.style.setProperty('--scrub-vh', isTouch ? '520' : '760');
     }
+    if (state === 'drive'){ target = scrollProgress(); kick(); }
+  }
+
+  window.addEventListener('wheel', function(e){
+    if (wheelSeen) return;
+    var d = Math.abs(e.deltaY);
+    if (e.deltaMode === 1) d *= 16;        /* Firefox reports lines, not px */
+    else if (e.deltaMode === 2) d *= window.innerHeight;
+    if (d === 0) return;
+    wheelSeen = true;
+    /* A wheel notch is a large, whole-number delta. Trackpads emit small
+       fractional ones and should keep the shorter, gesture-friendly runway. */
+    if (d >= 40 && Math.abs(d - Math.round(d)) < 0.01){
+      isWheel = true;
+      wheelPx = Math.round(d);
+    }
+    sizeRunway();
   }, {passive:true});
 
   /* ============================================================
-     PLAYHEAD — target + ease.
-     scroll position sets `target`; a rAF loop walks `current` toward it.
-     This is what makes a chunky wheel feel like a camera move instead of
-     a slideshow, and it costs nothing on smooth inputs.
+     PLAYHEAD — quantised to frames.
+     Two things make this smooth. First the target/ease pair, so coarse
+     input still produces continuous motion. Second, and more important,
+     the playhead snaps to exact frame boundaries and only seeks when the
+     frame index actually changes — asking a decoder for sub-frame
+     positions sixty times a second is what makes scrubbing stutter.
      ============================================================ */
   var target = 0, current = 0, raf = null, driveReady = false;
-  var EASE = reduced ? 1 : 0.12;
+  var EASE = reduced ? 1 : 0.22;
+  var lastFrame = -1;
 
   function scrollProgress(){
     var max = runway.offsetHeight - window.innerHeight;
@@ -357,13 +376,13 @@
   function tick(){
     var d = target - current;
     current += d * EASE;
-    if (Math.abs(d) < 0.00035) current = target;
+    if (Math.abs(d) < 0.00025) current = target;
 
-    if (driveReady && vDrive.duration){
-      var t = current * (vDrive.duration - 0.05);
-      /* Only seek on a real change. Redundant seeks on iOS stall the
-         decoder and produce the exact stutter we are trying to avoid. */
-      if (Math.abs(vDrive.currentTime - t) > 0.012){
+    if (driveReady && frameCount){
+      var idx = Math.round(current * (frameCount - 1));
+      if (idx !== lastFrame){
+        lastFrame = idx;
+        var t = Math.min(idx / FPS, vDrive.duration - 0.001);
         try { vDrive.currentTime = t; } catch(e){}
       }
     }
@@ -415,6 +434,9 @@
     hint.classList.add('hidden');
     subtitle.textContent = 'Launching';
 
+    /* The car going is what clears the lens. */
+    blowing = true;
+
     /* The click is our one guaranteed user gesture. iOS will not let us
        seek or start audio without it, so everything that needs unlocking
        gets unlocked here — even though playback starts later. */
@@ -458,8 +480,10 @@
        scrub a video that has not been introduced yet. */
     document.body.classList.remove('locked');
     runway.classList.add('live');
+    sizeRunway();
     window.scrollTo(0,0);
     target = current = 0;
+    lastFrame = -1;
     kick();
 
     setTimeout(function(){ vLaunch.classList.remove('on'); }, 500);
@@ -516,6 +540,17 @@
   var W = 0, H = 0, DPR = 1;
   var drops = [], beads = [];
 
+  /* Water is an Act 1 state. `blowing` starts the moment the car launches
+     and never resets — once the lens is clear, it stays clear. */
+  var blowing = false, blow = 0;
+
+  /* A bead that has been blown off is parked off-frame rather than
+     respawned, so the glass genuinely empties instead of recycling. */
+  function offscreenBead(b){
+    b.x = -9999; b.y = -9999; b.vx = b.vy = 0; b.trail = 0; b.a = 0;
+    return b;
+  }
+
   function sizeFx(){
     DPR = Math.min(window.devicePixelRatio || 1, 2);
     W = fx.width  = Math.floor(innerWidth  * DPR);
@@ -532,8 +567,8 @@
     for (var i=0;i<n;i++) drops.push(newDrop(true));
 
     beads = [];
-    var b = Math.min(46, Math.max(16, Math.round(area * 0.05)));
-    for (var j=0;j<b;j++) beads.push(newBead());
+    var b = Math.min(110, Math.max(38, Math.round(area * 0.12)));
+    for (var j=0;j<b;j++) beads.push(newBead(false));
   }
 
   function newDrop(anywhere){
@@ -548,14 +583,28 @@
     };
   }
 
-  function newBead(){
+  /* Beads sit ON the lens. Size is drawn from a weighted distribution
+     rather than a flat range: mostly fine mist, a few mid drops, the
+     occasional fat one. Real glass in rain looks like that, and a flat
+     range reads as noise. Bigger drops are heavier, so they hold on
+     less and run faster once they go. */
+  function newBead(atTop){
+    var roll = Math.random(), r;
+    if (roll < .58)      r = 3 + Math.random()*5;    /* fine mist   */
+    else if (roll < .87) r = 8 + Math.random()*9;    /* mid drops   */
+    else                 r = 17 + Math.random()*15;  /* fat drops   */
+    r *= DPR;
+    var heavy = r / (32*DPR);                        /* 0..1 mass    */
     return {
-      x: Math.random()*W, y: Math.random()*H,
-      r: (5 + Math.random()*16) * DPR,
-      a: 0.03 + Math.random()*0.07,
-      vy: 0,
-      hold: 60 + Math.random()*600,
-      trail: 0
+      x: Math.random()*W,
+      y: atTop ? Math.random()*H*0.4 : Math.random()*H,
+      r: r,
+      a: 0.13 + Math.random()*0.16 + heavy*0.16,
+      vx: 0, vy: 0,
+      grav: (0.02 + heavy*0.10) * DPR,               /* heavier runs sooner */
+      hold: (1 - heavy) * (120 + Math.random()*680), /* light ones cling    */
+      trail: 0,
+      wob: Math.random()*6.28
     };
   }
 
@@ -589,40 +638,88 @@
 
     ctx.clearRect(0,0,W,H);
 
-    /* rain */
-    ctx.lineCap = 'round';
-    for (var i=0;i<drops.length;i++){
-      var d = drops[i];
-      ctx.globalAlpha = d.a;
-      ctx.strokeStyle = '#cfe2ef';
-      ctx.lineWidth = d.w;
-      ctx.beginPath();
-      ctx.moveTo(d.x, d.y);
-      ctx.lineTo(d.x + d.sl, d.y + d.len);
-      ctx.stroke();
-      d.y += d.sp; d.x += d.sl * 0.35;
-      if (d.y > H + 30*DPR) drops[i] = newDrop(false);
+    /* Airflow ramp. Before launch the camera is idling and water sits on
+       the glass. From the moment the car goes, airflow over the housing
+       builds and strips the lens clear — so `blow` drives both the wind
+       force and the fade, and the water never comes back. */
+    if (blowing && blow < 1) blow = Math.min(1, blow + 0.0075);
+    var wet = 1 - blow;                       /* how much water remains */
+    var wind = blow * blow;                   /* force ramps in, not linear */
+
+    /* falling rain, in front of the lens */
+    if (wet > 0.001){
+      ctx.lineCap = 'round';
+      for (var i=0;i<drops.length;i++){
+        var d = drops[i];
+        ctx.globalAlpha = d.a * wet;
+        ctx.strokeStyle = '#cfe2ef';
+        ctx.lineWidth = d.w;
+        /* under airflow the fall angle shears and the streaks stretch */
+        var shear = wind * 26 * DPR;
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x + d.sl - shear, d.y + d.len * (1 + wind*1.8));
+        ctx.stroke();
+        d.y += d.sp * (1 + wind*2.2);
+        d.x += d.sl * 0.35 - wind * 9 * DPR;
+        if (d.y > H + 30*DPR || d.x < -60*DPR) drops[i] = newDrop(false);
+      }
     }
 
-    /* lens beads — water sitting on the glass, occasionally running */
-    for (var j=0;j<beads.length;j++){
-      var b = beads[j];
-      ctx.globalAlpha = b.a;
-      var g = ctx.createRadialGradient(b.x - b.r*.3, b.y - b.r*.3, b.r*.1, b.x, b.y, b.r);
-      g.addColorStop(0,'rgba(226,240,250,.85)');
-      g.addColorStop(.6,'rgba(160,190,210,.25)');
-      g.addColorStop(1,'rgba(120,150,175,0)');
-      ctx.fillStyle = g;
-      ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,6.2832); ctx.fill();
+    /* lens beads — water sitting on the glass */
+    if (wet > 0.001){
+      for (var j=0;j<beads.length;j++){
+        var b = beads[j];
 
-      if (b.hold > 0){ b.hold--; }
-      else {
-        b.vy += 0.06*DPR;
-        b.y += b.vy;
-        b.trail = Math.min(30*DPR, b.trail + b.vy*0.6);
-        ctx.globalAlpha = b.a*.5;
-        ctx.fillRect(b.x - b.r*.16, b.y - b.trail, b.r*.32, b.trail);
-        if (b.y - b.r > H){ beads[j] = newBead(); }
+        ctx.globalAlpha = b.a * wet;
+        /* Offset highlight plus a darker lower edge — a droplet acts as a
+           tiny lens, bright where light enters and dense at its base. */
+        var g = ctx.createRadialGradient(b.x - b.r*.34, b.y - b.r*.34, b.r*.08, b.x, b.y, b.r);
+        g.addColorStop(0,'rgba(255,255,255,.95)');
+        g.addColorStop(.35,'rgba(214,234,248,.55)');
+        g.addColorStop(.78,'rgba(150,182,205,.28)');
+        g.addColorStop(1,'rgba(110,140,165,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,6.2832); ctx.fill();
+        /* specular pin — what actually sells it as water rather than fog */
+        if (b.r > 7*DPR){
+          ctx.globalAlpha = b.a * wet * 1.15;
+          ctx.fillStyle = 'rgba(255,255,255,.9)';
+          ctx.beginPath();
+          ctx.arc(b.x - b.r*.36, b.y - b.r*.38, Math.max(0.7*DPR, b.r*.14), 0, 6.2832);
+          ctx.fill();
+        }
+
+        if (b.hold > 0 && wind < 0.02){
+          /* idling: surface tension holds it, with a faint wobble */
+          b.hold--;
+          b.wob += 0.03;
+          b.x += Math.sin(b.wob) * 0.05 * DPR;
+        } else {
+          /* Released, or torn loose by airflow. Wind pushes a bead
+             sideways and up over the housing; gravity pulls it down.
+             Larger beads catch more air, so they leave first and fastest. */
+          var area = b.r / (10*DPR);
+          b.vy += b.grav - wind * 0.5 * DPR * area;
+          b.vx -= wind * 0.85 * DPR * area;
+          b.x += b.vx;
+          b.y += b.vy;
+
+          var speed = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
+          b.trail = Math.min(46*DPR, b.trail + speed*0.55);
+
+          /* the trail smears along travel, not just straight down */
+          ctx.globalAlpha = b.a * wet * .55;
+          ctx.save();
+          ctx.translate(b.x, b.y);
+          ctx.rotate(Math.atan2(b.vy, b.vx) - Math.PI/2);
+          ctx.fillStyle = 'rgba(200,224,240,.9)';
+          ctx.fillRect(-b.r*.16, 0, b.r*.32, b.trail);
+          ctx.restore();
+
+          var gone = b.y - b.r > H || b.y + b.r < 0 || b.x + b.r < 0;
+          if (gone) beads[j] = wind > 0.02 ? offscreenBead(b) : newBead(false);
+        }
       }
     }
 
@@ -656,7 +753,11 @@
     }, 160);
   });
 
-  vDrive.addEventListener('loadedmetadata', function(){ kick(); });
+  vDrive.addEventListener('loadedmetadata', function(){
+    frameCount = Math.max(1, Math.round(vDrive.duration * FPS));
+    sizeRunway();
+    kick();
+  });
 
   /* iOS occasionally drops a paused-and-seeked video's frame when the tab
      is restored. Nudging currentTime forces it to repaint. */
