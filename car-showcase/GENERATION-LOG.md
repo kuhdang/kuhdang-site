@@ -9,6 +9,53 @@ just bookkeeping).
 
 ## Locked assets
 
+### `assets/act2-launch.mp4` — Act 2 launch and whip-around
+
+Generated in this session using the free-trial **unlimited** allowance — cost 0
+credits (balance verified unchanged at 2 before and after).
+
+| | |
+|---|---|
+| **Job ID** | `8df3fca8-923d-4020-90e4-25b4791313df` |
+| **Model** | `kling3_0`, `mode: pro`, `sound: on`, 8s, 16:9 |
+| **start_image** | `c038068e…` — the locked hero frame |
+| **Source** | 1924 × 1076, 24 fps, 23.6 Mb/s, 8.04 s, 23 MB |
+| **Committed** | 1920 × 1080, CRF 23, silent, faststart — 6.6 MB |
+| **Audio** | extracted to `assets/act2-launch-audio.m4a` (129 KB) |
+
+**Beat coverage — all three Act 2 beats landed in a single take:**
+
+| Time | Beat |
+|---|---|
+| 0–2s | car accelerates toward camera from the Act 1 framing |
+| 2–3s | close pass at peak speed, heavy motion blur, background streaking |
+| 3–4s | camera whips around to rear three-quarter |
+| 4–8s | settles on wing and taillight signature, car driving away, still moving |
+
+**Continuity with Act 1:** frame 0 measures SSIM 0.964 against `hero-frame.png`,
+so the loop-to-launch handoff needs no blending — the launch effectively begins
+inside Act 1's world. Same livery, grade, neon palette and rain throughout.
+
+Because the piece is all video rather than video-into-3D, the treatment's
+planned motion-blur handoff at the close pass is no longer a seam to hide — it
+is one continuous take.
+
+**Known compromises:**
+
+- A driver is briefly visible through the side window during the close pass
+  (~t=3s). Heavily motion-blurred, so low risk, but present.
+- Number plate reads as garbled text from ~t=5s onward in the rear framing.
+- The Candidate 3 livery is at its most prominent here — the "GT3 RS" side text
+  fills frame during the close pass.
+
+**Act 3 input:** the final frame is the natural `start_image` for Act 3, so the
+camera continues from where Act 2 settles. Not committed, since it is
+re-extractable:
+>
+> `ffmpeg -sseof -0.05 -i act2-launch.mp4 -update 1 -q:v 2 act2-final-frame.png`
+
+---
+
 ### `assets/hero-loop.mp4` — Act 1 hero loop
 
 Supplied by the user, who generated it **outside this session** and provided it
