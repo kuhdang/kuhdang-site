@@ -20,7 +20,7 @@ later shot art-directs back to this frame's light temperature and grade.
 | **Job ID** | `3ee06f36-0712-4ec6-bc81-e507d4af8874` |
 | **Model** | `nano_banana_pro` (served as `nano_banana_2`) |
 | **Dimensions** | 1376 × 768 (16:9, 1k) |
-| **Cost** | 2 credits (batch of 4 candidates) |
+| **Cost** | 8 credits (4 candidates × 2 credits each) |
 | **Selected** | Candidate 4 of 4 |
 
 **Why this frame won:** streetlight sits directly above the car (the loop beat
@@ -58,7 +58,11 @@ fidelity. Carries a fabricated "GT3 RS" number plate.
 | `kling3_0` | 8s, 1080p, pro, sound **on** | 20 |
 | `cinematic_studio_3_0` | 8s, 1080p | 80 |
 | `cinematic_studio_3_0` | per second | 10 |
-| `nano_banana_pro` | still, 1k (batch up to 4) | 2 |
+| `nano_banana_pro` | still, 1k | 2 **per image** |
+
+> **Preflight caveat:** `get_cost: true` under-reports batches. A `count: 4`
+> image request preflighted at 2 credits but billed 8 (2 per image). Treat
+> preflight as a *per-unit* price and multiply by `count` yourself.
 
 `kling3_0` is the workhorse: ~5.7× cheaper than Cinema Studio for equivalent
 duration, and it accepts both `start_image` and `end_image` — required for the
