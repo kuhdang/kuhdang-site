@@ -16,43 +16,51 @@ credits (balance verified unchanged at 2 before and after).
 
 | | |
 |---|---|
-| **Job ID** | `8df3fca8-923d-4020-90e4-25b4791313df` |
+| **Job ID** | `4c45c79c-5e11-48bb-b83f-f4255be3d806` (B1) |
 | **Model** | `kling3_0`, `mode: pro`, `sound: on`, 8s, 16:9 |
-| **start_image** | `c038068e…` — the locked hero frame |
-| **Source** | 1924 × 1076, 24 fps, 23.6 Mb/s, 8.04 s, 23 MB |
-| **Committed** | 1920 × 1080, CRF 23, silent, faststart — 6.6 MB |
+| **start_image** | `3ee06f36…` — Candidate 4, matching the locked Act 1 |
+| **Source** | 1920 × 1080, 24 fps, 8.04 s, 20 MB |
+| **Committed** | CRF 23, silent, faststart — 6.1 MB |
 | **Audio** | extracted to `assets/act2-launch-audio.m4a` (129 KB) |
 
 **Beat coverage — all three Act 2 beats landed in a single take:**
 
 | Time | Beat |
 |---|---|
-| 0–2s | car accelerates toward camera from the Act 1 framing |
-| 2–3s | close pass at peak speed, heavy motion blur, background streaking |
-| 3–4s | camera whips around to rear three-quarter |
-| 4–8s | settles on wing and taillight signature, car driving away, still moving |
+| 0–1s | car mid-distance in Act 1's world |
+| 2s | accelerates toward camera, front-on |
+| 3s | close pass at peak speed, wheel and flank smeared into blur |
+| 4s | whip-around lands on rear three-quarter, wing and taillight bar |
+| 5–8s | settles, car driving away, spray and mist kicking up behind |
 
-> ⚠️ **OUT OF DATE — must be regenerated.** This take was built from
-> **Candidate 3**, but Act 1 has since been re-locked to **Candidate 4**. The two
-> acts now show different cars: Act 2's carries the yellow livery and "GT3 RS"
-> side text, Act 1's does not. The handoff will read as a hard cut on the car
-> itself. Regenerate from `3ee06f36…` before any build work depends on it.
-
-**Continuity with Act 1:** frame 0 measured SSIM 0.964 against the *Candidate 3*
-hero frame, so the handoff was seamless under the old pairing. That figure no
-longer applies now that Act 1 comes from Candidate 4.
+**Continuity with Act 1:** frame 0 measures SSIM 0.933 against `hero-frame.png`
+(Candidate 4), so the loop-to-launch handoff needs no blending. Same car, grade,
+neon palette and rain throughout.
 
 Because the piece is all video rather than video-into-3D, the treatment's
 planned motion-blur handoff at the close pass is no longer a seam to hide — it
 is one continuous take.
 
+**Selection — three takes were compared:**
+
+| Take | Prompt | Outcome |
+|---|---|---|
+| **B1** | original Act 2 prompt, Candidate 4 start | **Selected.** Holds distance, all three beats, no visible driver |
+| B2 | + slow-shutter blur, distance rule dropped | Camera drifted into the door panel at t=3–5s — unusable framing |
+| B2r | identical prompt to B2, second roll | Best measured blur (edge density 0.97 at t=4 vs B1's 3.48, ~72% softer) but not selected |
+
+The B2/B2r pair is the useful record here: **the same prompt produced both the
+worst framing and the best close pass.** The extreme close-ups in B2 were roll
+variance, not prompt causation — a planned "B3" to re-impose a distance
+constraint would have been fixing a bug that did not exist. With generation
+free, re-rolling an unchanged prompt is often more informative than rewriting it.
+
 **Known compromises:**
 
-- A driver is briefly visible through the side window during the close pass
-  (~t=3s). Heavily motion-blurred, so low risk, but present.
-- Number plate reads as garbled text from ~t=5s onward in the rear framing.
-- The Candidate 3 livery is at its most prominent here — the "GT3 RS" side text
-  fills frame during the close pass.
+- **The settle at t=4–5s is close and fairly crisp** — panel lines, wheel spokes
+  and exhaust tips are readable. This is the frame most exposed to detail
+  scrutiny. B2r resolved it via heavy blur but was not the chosen take.
+- **The "GT3 RS" plate is legible** in several frames, inherited from Candidate 4.
 
 **Act 3 input:** the final frame is the natural `start_image` for Act 3, so the
 camera continues from where Act 2 settles. Not committed, since it is
