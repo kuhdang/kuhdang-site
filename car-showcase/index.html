@@ -442,7 +442,16 @@
      travel exactly one notch's distance — same calibration as before, just
      delivered as a decelerating glide instead of a jump.
      ============================================================ */
-  var MOM_GAIN = 0.07, MOM_FRICTION = 0.93;
+  /* Friction sets how long the glide lasts; the pairing keeps where it ends
+     up unchanged. At 0.93 velocity was spent in about a second, which read as
+     the scroll stopping short. At 0.985 a flick coasts for several seconds
+     and decays gently the whole way.
+
+     The stop threshold matters as much as the friction — cutting off at 0.08
+     px/frame clipped the tail of the curve, ending the glide while it was
+     still visibly moving. Dropping it to 0.01 lets it actually come to rest. */
+  var MOM_GAIN = 0.015, MOM_FRICTION = 0.985;
+  var MOM_STOP = 0.01;
   var vel = 0, momRaf = null, momPos = 0;
 
   function momentumStep(){
@@ -452,7 +461,7 @@
     if (momPos <= 0){ momPos = 0; vel = 0; }
     else if (momPos >= max){ momPos = max; vel = 0; }
     window.scrollTo(0, momPos);
-    if (Math.abs(vel) > 0.08) momRaf = requestAnimationFrame(momentumStep);
+    if (Math.abs(vel) > MOM_STOP) momRaf = requestAnimationFrame(momentumStep);
     else momRaf = null;
   }
 
