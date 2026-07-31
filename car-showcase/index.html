@@ -422,8 +422,56 @@
      positions sixty times a second is what makes scrubbing stutter.
      ============================================================ */
   var target = 0, current = 0, raf = null, driveReady = false;
-  var EASE = reduced ? 1 : 0.22;
+  var EASE = reduced ? 1 : 0.28;
   var lastFrame = -1;
+
+  /* ============================================================
+     MOMENTUM — mouse wheel only.
+     A wheel emits discrete steps and stops dead; trackpads and touch get
+     inertia from the OS for free. So we synthesise it here, and only here,
+     rather than fighting the platform's own physics.
+
+     Critically this drives the *scroll position*, not the playhead. If
+     momentum were applied to the video directly, the page's scroll and the
+     picture would drift apart and snap back together on the next input.
+     Moving the scroll keeps the scrollbar, the progress bar, the stats and
+     the frame all describing the same moment.
+
+     GAIN and FRICTION are paired: total glide from one impulse is
+     delta * GAIN / (1 - FRICTION), so GAIN == 1 - FRICTION makes one notch
+     travel exactly one notch's distance — same calibration as before, just
+     delivered as a decelerating glide instead of a jump.
+     ============================================================ */
+  var MOM_GAIN = 0.07, MOM_FRICTION = 0.93;
+  var vel = 0, momRaf = null, momPos = 0;
+
+  function momentumStep(){
+    var max = runway.offsetHeight - window.innerHeight;
+    momPos += vel;
+    vel *= MOM_FRICTION;
+    if (momPos <= 0){ momPos = 0; vel = 0; }
+    else if (momPos >= max){ momPos = max; vel = 0; }
+    window.scrollTo(0, momPos);
+    if (Math.abs(vel) > 0.08) momRaf = requestAnimationFrame(momentumStep);
+    else momRaf = null;
+  }
+
+  function wheelDelta(e){
+    var d = e.deltaY;
+    if (e.deltaMode === 1) d *= 16;
+    else if (e.deltaMode === 2) d *= window.innerHeight;
+    return d;
+  }
+
+  window.addEventListener('wheel', function(e){
+    if (state !== 'drive' || !isWheel || reduced) return;
+    e.preventDefault();
+    /* Re-anchor whenever the glide has settled, so a scrollbar drag or a
+       keyboard jump in between is picked up rather than overwritten. */
+    if (momRaf === null) momPos = window.scrollY || window.pageYOffset || 0;
+    vel += wheelDelta(e) * MOM_GAIN;
+    if (momRaf === null) momRaf = requestAnimationFrame(momentumStep);
+  }, {passive:false});
 
   function scrollProgress(){
     var max = runway.offsetHeight - window.innerHeight;
