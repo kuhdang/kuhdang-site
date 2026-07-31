@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>911 GT3 RS</title>
+<meta name="description" content="An interactive showcase.">
+<link rel="icon" href="../favicon.png">
+<style>
+  :root{
+    --ink:#f2f2f0;
+    --dim:rgba(242,242,240,.55);
+    --hair:rgba(242,242,240,.18);
+    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --ease:cubic-bezier(.22,.61,.36,1);
+    /* Act 3 scroll distance. Tuned per input class at runtime. */
+    --scrub-vh:600;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:#000;color:var(--ink)}
+  body{
+    font-family:var(--mono);
+    -webkit-font-smoothing:antialiased;
+    overscroll-behavior-y:none;      /* kill pull-to-refresh mid-scrub */
+    text-rendering:optimizeLegibility;
+  }
+  body.locked{overflow:hidden;height:100%}
+
+  /* ---------- stage ---------- */
+  /* 100lvh, not dvh: immune to iOS Safari's address-bar resize, which
+     otherwise retriggers layout mid-scrub. Same lesson as the main site. */
+  .stage{
+    position:fixed; inset:0;
+    height:100lvh;
+    overflow:hidden;
+    background:#000;
+    z-index:1;
+  }
+  .stage video{
+    position:absolute; top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    min-width:100%; min-height:100%;
+    width:auto; height:auto;
+    object-fit:cover;
+    opacity:0;
+    transition:opacity .45s linear;
+    will-change:opacity;
+  }
+  .stage video.on{opacity:1}
+
+  /* Mobile portrait: 16:9 letterboxed on a phone makes the car tiny.
+     Cover-crop instead and bias toward frame centre where the car sits. */
+  @media (max-aspect-ratio:1/1){
+    .stage video{
+      width:100%; height:100%;
+      object-fit:cover; object-position:58% center;
+    }
+  }
+
+  /* ---------- overlay: the connective tissue ---------- */
+  /* One layer above all three acts. Because it never changes across act
+     boundaries, it does the work of hiding that they are separate files. */
+  #fx{
+    position:fixed; inset:0;
+    z-index:5; pointer-events:none;
+    mix-blend-mode:screen;
+    opacity:.85;
+  }
+  .vignette{
+    position:fixed; inset:0; z-index:6; pointer-events:none;
+    background:
+      radial-gradient(120% 85% at 50% 45%,transparent 42%,rgba(0,0,0,.55) 100%),
+      linear-gradient(to bottom,rgba(0,0,0,.35),transparent 22%,transparent 78%,rgba(0,0,0,.45));
+  }
+
+  /* ---------- UI ---------- */
+  .ui{position:fixed;z-index:10}
+
+  .hint{
+    left:50%; bottom:clamp(28px,7vh,64px);
+    transform:translateX(-50%);
+    text-align:center;
+    font-size:11px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--dim);
+    transition:opacity .5s var(--ease);
+  }
+  .hint .k{
+    display:block; margin-top:10px;
+    font-size:10px; letter-spacing:.2em; color:rgba(242,242,240,.35);
+  }
+  .pulse{animation:pulse 2.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.5}50%{opacity:1}}
+
+  .title{
+    left:clamp(18px,4vw,44px); top:clamp(18px,4vh,40px);
+    font-size:11px; letter-spacing:.3em; text-transform:uppercase;
+    line-height:1.9; color:var(--dim);
+    transition:opacity .6s var(--ease);
+  }
+  .title b{display:block;color:var(--ink);font-weight:500;letter-spacing:.22em}
+
+  .back{
+    right:clamp(18px,4vw,44px); top:clamp(18px,4vh,40px);
+    font-size:10px; letter-spacing:.24em; text-transform:uppercase;
+    color:var(--dim); text-decoration:none;
+    padding:8px 2px; pointer-events:auto;
+    transition:color .3s;
+  }
+  .back:hover{color:var(--ink)}
+
+  .sound{
+    right:clamp(18px,4vw,44px); bottom:clamp(18px,4vh,40px);
+    display:flex; align-items:center; gap:9px;
+    font-size:10px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--dim);
+    background:none; border:0; font-family:inherit;
+    cursor:pointer; pointer-events:auto;
+    padding:10px 2px;
+    transition:color .3s;
+  }
+  .sound:hover{color:var(--ink)}
+  .bars{display:flex;align-items:flex-end;gap:2px;height:11px}
+  .bars i{width:2px;height:3px;background:currentColor;display:block;transition:height .2s}
+  .sound.on .bars i:nth-child(1){height:5px;animation:eq .9s ease-in-out infinite}
+  .sound.on .bars i:nth-child(2){height:11px;animation:eq .9s ease-in-out .15s infinite}
+  .sound.on .bars i:nth-child(3){height:7px;animation:eq .9s ease-in-out .3s infinite}
+  @keyframes eq{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
+
+  /* ---------- stats ---------- */
+  .stat{
+    position:fixed; z-index:9; pointer-events:none;
+    max-width:min(78vw,340px);
+    opacity:0;
+    transform:translateY(10px);
+    transition:opacity .5s var(--ease),transform .7s var(--ease);
+    will-change:opacity,transform;
+  }
+  .stat.show{opacity:1;transform:none}
+  /* Clip 2 fills the frame with bright bodywork, so there is no reliable
+     dark negative space left to drop captions into. A soft local scrim
+     guarantees contrast without reading as a panel or box. */
+  .stat::before{
+    content:''; position:absolute; z-index:-1;
+    left:-46px; right:-46px; top:-40px; bottom:-40px;
+    background:radial-gradient(ellipse at center,
+      rgba(0,0,0,.66) 0%, rgba(0,0,0,.46) 42%, rgba(0,0,0,0) 76%);
+  }
+  /* Act 3's footage fills frame in places, so captions cannot rely on
+     landing over empty road. A soft shadow keeps them legible over
+     bodywork without introducing a visible plate or box. */
+  .stat .lab,.stat .val,.stat .unit{
+    text-shadow:0 1px 3px rgba(0,0,0,.85),0 0 22px rgba(0,0,0,.7);
+  }
+  .stat .lab{
+    display:block;
+    font-size:10px; letter-spacing:.3em; text-transform:uppercase;
+    color:var(--dim); margin-bottom:10px;
+  }
+  .stat .val{
+    display:block;
+    font-size:clamp(26px,5.2vw,52px);
+    letter-spacing:-.02em; line-height:1; color:var(--ink);
+    font-weight:400;
+    white-space:nowrap;
+  }
+  .stat .val small{font-size:.42em;letter-spacing:.06em;margin-left:.5em;color:var(--dim)}
+  /* Long units get their own line rather than wrapping mid-value. */
+  .stat .unit{
+    display:block; margin-top:9px;
+    font-size:11px; letter-spacing:.18em;
+    color:rgba(242,242,240,.78);
+    white-space:nowrap;
+  }
+  .stat .rule{display:block;width:34px;height:1px;background:var(--hair);margin-top:16px}
+
+  /* Per-beat placement. Kept clear of frame centre-right where the car sits. */
+  .p-tl{left:clamp(18px,6vw,88px); top:24vh}
+  .p-bl{left:clamp(18px,6vw,88px); bottom:22vh}
+  .p-tr{right:clamp(18px,6vw,88px); top:22vh; text-align:right}
+  .p-br{right:clamp(18px,6vw,88px); bottom:24vh; text-align:right}
+  .p-tr .rule,.p-br .rule{margin-left:auto}
+  @media (max-aspect-ratio:1/1){
+    .p-tl,.p-bl{left:clamp(16px,6vw,40px)}
+    .p-tr,.p-br{right:clamp(16px,6vw,40px)}
+    .p-tl,.p-tr{top:16vh}
+    .p-bl,.p-br{bottom:18vh}
+  }
+
+  /* ---------- progress ---------- */
+  .prog{
+    position:fixed; left:0; right:0; bottom:0; height:1px;
+    background:var(--hair); z-index:10;
+    opacity:0; transition:opacity .5s;
+  }
+  .prog.on{opacity:1}
+  .prog i{display:block;height:100%;width:0;background:var(--ink);transform-origin:left}
+
+  /* ---------- scroll driver ---------- */
+  /* Act 3's scroll runway. Real document height is what gives us native
+     inertia, keyboard keys, scrollbar drag and trackpad momentum for free. */
+  #runway{height:1px}
+  #runway.live{height:calc(var(--scrub-vh) * 1vh)}
+
+  /* A running CSS animation beats `opacity:0 !important`, so the pulse has
+     to be killed too or the launch hint never actually leaves. */
+  .hidden{opacity:0 !important;pointer-events:none;animation:none !important}
+
+  /* Arrives opaque and lifts on load, so the black the card faded into and
+     the black this page starts on are the same black. Sits above the video
+     but below the UI, so the chrome fades up with the picture. */
+  #veil{
+    position:fixed; inset:0; background:#000; z-index:7;
+    pointer-events:none; opacity:1;
+    transition:opacity .9s cubic-bezier(.4,0,.2,1);
+  }
+  #veil.lift{opacity:0}
+
+  @media (prefers-reduced-motion:reduce){
+    .pulse{animation:none}
+    .stat{transition:opacity .2s linear;transform:none}
+  }
+</style>
+</head>
+<body class="locked">
+
+<div class="stage" id="stage">
+  <!-- WebM first: VP9 is markedly smaller at equal quality and is what
+       Chrome, Firefox and Edge will take. Safari and iOS fall through to
+       the H.264 MP4. -->
+  <video id="vLoop" muted loop playsinline preload="auto" poster="assets/hero-frame.png">
+    <source src="assets/hero-loop.webm" type="video/webm">
+    <source src="assets/hero-loop.mp4"  type="video/mp4">
+  </video>
+  <video id="vLaunch" muted playsinline preload="auto">
+    <source src="assets/act2-launch.webm" type="video/webm">
+    <source src="assets/act2-launch.mp4"  type="video/mp4">
+  </video>
+  <video id="vDrive" muted playsinline preload="auto">
+    <source src="assets/act3-drive.webm" type="video/webm">
+    <source src="assets/act3-drive.mp4"  type="video/mp4">
+  </video>
+</div>
+
+<canvas id="fx"></canvas>
+<div class="vignette"></div>
+<div id="veil"></div>
+
+<div class="ui title" id="title">
+  <b>911 GT3 RS</b>
+  <span id="subtitle">Interactive showcase</span>
+</div>
+
+<a class="ui back" href="../">← kuhdang</a>
+
+<button class="ui sound" id="sound" aria-pressed="false">
+  <span class="bars"><i></i><i></i><i></i></span>
+  <span id="soundLabel">Sound off</span>
+</button>
+
+<div class="ui hint pulse" id="hint">
+  Click to launch
+  <span class="k">or press space</span>
+</div>
+
+<div class="prog" id="prog"><i id="progBar"></i></div>
+
+<div id="stats"></div>
+
+<div id="runway"></div>
+
+<audio id="bed" src="assets/hero-loop-audio.m4a" loop preload="auto"></audio>
+
+<script>
+(function(){
+  "use strict";
+
+  var stage   = document.getElementById('stage');
+  var vLoop   = document.getElementById('vLoop');
+  var vLaunch = document.getElementById('vLaunch');
+  var vDrive  = document.getElementById('vDrive');
+  var hint    = document.getElementById('hint');
+  var title   = document.getElementById('title');
+  var subtitle= document.getElementById('subtitle');
+  var runway  = document.getElementById('runway');
+  var prog    = document.getElementById('prog');
+  var progBar = document.getElementById('progBar');
+  var bed     = document.getElementById('bed');
+  var soundBtn= document.getElementById('sound');
+  var soundLbl= document.getElementById('soundLabel');
+  var statsEl = document.getElementById('stats');
+
+  var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ============================================================
+     STATS — six facts across five camera beats.
+     Beat 3 (side profile) carries two, since beat 6 was dropped.
+     `at` / `to` are normalised positions along the Act 3 track.
+     ============================================================ */
+  /* `suf` sits inline with the number; `unit` drops to its own line so a
+     long string never wraps through the middle of the value. */
+  var STATS = [
+    {lab:'0–60 mph',    val:'2.9',       suf:'sec', at:.030, to:.155, pos:'p-bl'},
+    {lab:'Top speed',   val:'184',       suf:'mph', at:.175, to:.300, pos:'p-tl'},
+    {lab:'Horsepower',  val:'518',       suf:'hp',  at:.320, to:.440, pos:'p-bl'},
+    {lab:'Weight, dry', val:'3,268',     suf:'lbs', at:.455, to:.575, pos:'p-tl'},
+    {lab:'Engine',      val:'4.0',       suf:'L',   unit:'Flat-six · 9,000 rpm', at:.595, to:.735, pos:'p-tr'},
+    {lab:'Nürburgring', val:'6:49.328',  suf:'',    at:.755, to:1.01,  pos:'p-tr'}
+  ];
+
+  STATS.forEach(function(s){
+    var el = document.createElement('div');
+    el.className = 'stat ' + s.pos;
+    el.innerHTML =
+      '<span class="lab">' + s.lab + '</span>' +
+      '<span class="val">' + s.val + (s.suf ? '<small>' + s.suf + '</small>' : '') + '</span>' +
+      (s.unit ? '<span class="unit">' + s.unit + '</span>' : '') +
+      '<span class="rule"></span>';
+    statsEl.appendChild(el);
+    s.el = el;
+    s.on = false;
+  });
+
+  /* ============================================================
+     INPUT PROFILE
+     A mouse wheel emits coarse discrete deltas; a trackpad emits fine
+     continuous ones. Rather than guess, we measure the first real wheel
+     event and size the scroll runway so that ONE NOTCH ADVANCES EXACTLY
+     ONE FRAME. That is what makes wheel scrubbing feel like stepping
+     through film instead of jumping between positions.
+     ============================================================ */
+  var isTouch = matchMedia('(hover:none)').matches || ('ontouchstart' in window);
+
+  var FPS = 24;                 /* all three acts are encoded at 24fps */
+  var frameCount = 0;
+  var wheelPx = 100;            /* measured from the first wheel event */
+  var isWheel = false;
+  var wheelSeen = false;
+
+  function sizeRunway(){
+    if (!frameCount) return;
+    if (isWheel){
+      /* one notch : one frame */
+      runway.style.height = (frameCount * wheelPx + window.innerHeight) + 'px';
+    } else {
+      runway.style.height = '';                       /* fall back to CSS */
+      document.documentElement.style.setProperty('--scrub-vh', isTouch ? '520' : '760');
+    }
+    if (state === 'drive'){ target = scrollProgress(); kick(); }
+  }
+
+  window.addEventListener('wheel', function(e){
+    if (wheelSeen) return;
+    var d = Math.abs(e.deltaY);
+    if (e.deltaMode === 1) d *= 16;        /* Firefox reports lines, not px */
+    else if (e.deltaMode === 2) d *= window.innerHeight;
+    if (d === 0) return;
+    wheelSeen = true;
+    /* A wheel notch is a large, whole-number delta. Trackpads emit small
+       fractional ones and should keep the shorter, gesture-friendly runway. */
+    if (d >= 40 && Math.abs(d - Math.round(d)) < 0.01){
+      isWheel = true;
+      wheelPx = Math.round(d);
+    }
+    sizeRunway();
+  }, {passive:true});
+
+  /* ============================================================
+     PLAYHEAD — quantised to frames.
+     Two things make this smooth. First the target/ease pair, so coarse
+     input still produces continuous motion. Second, and more important,
+     the playhead snaps to exact frame boundaries and only seeks when the
+     frame index actually changes — asking a decoder for sub-frame
+     positions sixty times a second is what makes scrubbing stutter.
+     ============================================================ */
+  var target = 0, current = 0, raf = null, driveReady = false;
+  var EASE = reduced ? 1 : 0.22;
+  var lastFrame = -1;
+
+  function scrollProgress(){
+    var max = runway.offsetHeight - window.innerHeight;
+    if (max <= 0) return 0;
+    var y = window.scrollY || window.pageYOffset || 0;
+    return Math.min(1, Math.max(0, y / max));
+  }
+
+  function tick(){
+    var d = target - current;
+    current += d * EASE;
+    if (Math.abs(d) < 0.00025) current = target;
+
+    if (driveReady && frameCount){
+      var idx = Math.round(current * (frameCount - 1));
+      if (idx !== lastFrame){
+        lastFrame = idx;
+        var t = Math.min(idx / FPS, vDrive.duration - 0.001);
+        try { vDrive.currentTime = t; } catch(e){}
+      }
+    }
+
+    progBar.style.transform = 'scaleX(' + current + ')';
+
+    STATS.forEach(function(s){
+      var show = current >= s.at && current <= s.to;
+      if (show !== s.on){
+        s.on = show;
+        s.el.classList.toggle('show', show);
+      }
+    });
+
+    if (Math.abs(target - current) > 0.00035){
+      raf = requestAnimationFrame(tick);
+    } else {
+      raf = null;
+    }
+  }
+
+  function kick(){ if (raf === null) raf = requestAnimationFrame(tick); }
+
+  window.addEventListener('scroll', function(){
+    if (state !== 'drive') return;
+    target = scrollProgress();
+    kick();
+  }, {passive:true});
+
+  /* ============================================================
+     STATE
+     ============================================================ */
+  var state = 'loop';
+
+  function show(v){
+    [vLoop,vLaunch,vDrive].forEach(function(x){ x.classList.toggle('on', x === v); });
+  }
+
+  function startLoop(){
+    show(vLoop);
+    var p = vLoop.play();
+    if (p && p.catch) p.catch(function(){});
+  }
+
+  function launch(){
+    if (state !== 'loop') return;
+    state = 'launch';
+
+    hint.classList.add('hidden');
+    subtitle.textContent = 'Launching';
+
+    /* The car going is what clears the lens. */
+    blowing = true;
+
+    /* The click is our one guaranteed user gesture. iOS will not let us
+       seek or start audio without it, so everything that needs unlocking
+       gets unlocked here — even though playback starts later. */
+    vDrive.play().then(function(){ vDrive.pause(); }).catch(function(){});
+
+    vLaunch.currentTime = 0;
+    show(vLaunch);
+    var p = vLaunch.play();
+    if (p && p.catch) p.catch(function(){ toDrive(); });
+
+    /* Hand off slightly before the file ends. Waiting for `ended` shows a
+       frozen final frame for a beat, which reads as a stall. */
+    var handedOff = false;
+    function watch(){
+      if (handedOff) return;
+      if (vLaunch.duration && vLaunch.currentTime >= vLaunch.duration - 0.18){
+        handedOff = true;
+        toDrive();
+        return;
+      }
+      requestAnimationFrame(watch);
+    }
+    requestAnimationFrame(watch);
+    vLaunch.addEventListener('ended', function(){
+      if (!handedOff){ handedOff = true; toDrive(); }
+    }, {once:true});
+  }
+
+  function toDrive(){
+    if (state === 'drive') return;
+    state = 'drive';
+
+    subtitle.textContent = 'Scroll to explore';
+    prog.classList.add('on');
+
+    vDrive.currentTime = 0;
+    driveReady = true;
+    show(vDrive);
+
+    /* Unlock the document only now. Scrolling before this point would
+       scrub a video that has not been introduced yet. */
+    document.body.classList.remove('locked');
+    runway.classList.add('live');
+    sizeRunway();
+    window.scrollTo(0,0);
+    target = current = 0;
+    lastFrame = -1;
+    kick();
+
+    setTimeout(function(){ vLaunch.classList.remove('on'); }, 500);
+  }
+
+  stage.addEventListener('click', launch);
+  window.addEventListener('keydown', function(e){
+    if ((e.code === 'Space' || e.key === ' ') && state === 'loop'){
+      e.preventDefault(); launch();
+    }
+  });
+
+  /* ============================================================
+     AUDIO — one continuous bed.
+     Deliberately not baked into the clips: scrubbing Act 3 would shred
+     baked audio. Running it as an independent loop means the sound never
+     cuts at an act boundary, mirroring the visual overlay.
+     ============================================================ */
+  var soundOn = false;
+  bed.volume = 0;
+  soundBtn.addEventListener('click', function(e){
+    e.stopPropagation();
+    soundOn = !soundOn;
+    soundBtn.classList.toggle('on', soundOn);
+    soundBtn.setAttribute('aria-pressed', String(soundOn));
+    soundLbl.textContent = soundOn ? 'Sound on' : 'Sound off';
+    if (soundOn){
+      bed.play().catch(function(){});
+      ramp(0.55);
+    } else {
+      ramp(0, function(){ bed.pause(); });
+    }
+  });
+
+  function ramp(to, done){
+    var from = bed.volume, t0 = performance.now(), dur = 600;
+    (function step(now){
+      var k = Math.min(1, (now - t0) / dur);
+      bed.volume = from + (to - from) * k;
+      if (k < 1) requestAnimationFrame(step); else if (done) done();
+    })(performance.now());
+  }
+
+  /* ============================================================
+     FX — grain + rain + lens droplets.
+     This is the layer that carries the treatment's "physical camera"
+     language across all three acts. It also does real repair work: the
+     generated footage never produced convincing lens droplets, and its
+     rain thins out whenever a shot faces a lit street. Here the density
+     is constant regardless of what any individual clip is doing.
+     ============================================================ */
+  var fx = document.getElementById('fx');
+  var ctx = fx.getContext('2d', {alpha:true});
+  var W = 0, H = 0, DPR = 1;
+  var drops = [], beads = [];
+
+  /* Water is an Act 1 state. `blowing` starts the moment the car launches
+     and never resets — once the lens is clear, it stays clear. */
+  var blowing = false, blow = 0;
+
+  /* A bead that has been blown off is parked off-frame rather than
+     respawned, so the glass genuinely empties instead of recycling. */
+  function offscreenBead(b){
+    b.x = -9999; b.y = -9999; b.vx = b.vy = 0; b.trail = 0; b.a = 0;
+    return b;
+  }
+
+  function sizeFx(){
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = fx.width  = Math.floor(innerWidth  * DPR);
+    H = fx.height = Math.floor(innerHeight * DPR);
+    fx.style.width = innerWidth + 'px';
+    fx.style.height = innerHeight + 'px';
+    seed();
+  }
+
+  function seed(){
+    var area = (innerWidth * innerHeight) / 1000;
+    var n = Math.min(340, Math.max(120, Math.round(area * 0.42)));
+    drops = [];
+    for (var i=0;i<n;i++) drops.push(newDrop(true));
+
+    beads = [];
+    var b = Math.min(110, Math.max(38, Math.round(area * 0.12)));
+    for (var j=0;j<b;j++) beads.push(newBead(false));
+  }
+
+  function newDrop(anywhere){
+    return {
+      x: Math.random() * W,
+      y: anywhere ? Math.random() * H : -20 * DPR,
+      len: (8 + Math.random()*26) * DPR,
+      sp:  (7 + Math.random()*13) * DPR,
+      sl:  (-1.6 + Math.random()*0.9) * DPR,
+      a:   0.10 + Math.random()*0.30,
+      w:   Math.random() < .75 ? 1*DPR : 1.6*DPR
+    };
+  }
+
+  /* Beads sit ON the lens. Size is drawn from a weighted distribution
+     rather than a flat range: mostly fine mist, a few mid drops, the
+     occasional fat one. Real glass in rain looks like that, and a flat
+     range reads as noise. Bigger drops are heavier, so they hold on
+     less and run faster once they go. */
+  function newBead(atTop){
+    var roll = Math.random(), r;
+    if (roll < .58)      r = 3 + Math.random()*5;    /* fine mist   */
+    else if (roll < .87) r = 8 + Math.random()*9;    /* mid drops   */
+    else                 r = 17 + Math.random()*15;  /* fat drops   */
+    r *= DPR;
+    var heavy = r / (32*DPR);                        /* 0..1 mass    */
+    return {
+      x: Math.random()*W,
+      y: atTop ? Math.random()*H*0.4 : Math.random()*H,
+      r: r,
+      a: 0.13 + Math.random()*0.16 + heavy*0.16,
+      vx: 0, vy: 0,
+      grav: (0.02 + heavy*0.10) * DPR,               /* heavier runs sooner */
+      hold: (1 - heavy) * (120 + Math.random()*680), /* light ones cling    */
+      trail: 0,
+      wob: Math.random()*6.28
+    };
+  }
+
+  var grain = document.createElement('canvas');
+  var gctx = grain.getContext('2d');
+  var GS = 128;
+  grain.width = grain.height = GS;
+  var grainFrames = [], gi = 0;
+
+  function bakeGrain(){
+    grainFrames = [];
+    for (var f=0; f<3; f++){
+      var img = gctx.createImageData(GS, GS);
+      for (var i=0;i<img.data.length;i+=4){
+        var v = 118 + (Math.random()*74 - 37);
+        img.data[i]=img.data[i+1]=img.data[i+2]=v;
+        img.data[i+3]=15;
+      }
+      var c = document.createElement('canvas');
+      c.width=c.height=GS;
+      c.getContext('2d').putImageData(img,0,0);
+      grainFrames.push(c);
+    }
+  }
+
+  var last = 0, gswap = 0;
+  function drawFx(now){
+    requestAnimationFrame(drawFx);
+    if (now - last < 1000/30) return;   /* 30fps is plenty and halves cost */
+    last = now;
+
+    ctx.clearRect(0,0,W,H);
+
+    /* Airflow ramp. Before launch the camera is idling and water sits on
+       the glass. From the moment the car goes, airflow over the housing
+       builds and strips the lens clear — so `blow` drives both the wind
+       force and the fade, and the water never comes back. */
+    if (blowing && blow < 1) blow = Math.min(1, blow + 0.0075);
+    var wet = 1 - blow;                       /* how much water remains */
+    var wind = blow * blow;                   /* force ramps in, not linear */
+
+    /* falling rain, in front of the lens */
+    if (wet > 0.001){
+      ctx.lineCap = 'round';
+      for (var i=0;i<drops.length;i++){
+        var d = drops[i];
+        ctx.globalAlpha = d.a * wet;
+        ctx.strokeStyle = '#cfe2ef';
+        ctx.lineWidth = d.w;
+        /* under airflow the fall angle shears and the streaks stretch */
+        var shear = wind * 26 * DPR;
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x + d.sl - shear, d.y + d.len * (1 + wind*1.8));
+        ctx.stroke();
+        d.y += d.sp * (1 + wind*2.2);
+        d.x += d.sl * 0.35 - wind * 9 * DPR;
+        if (d.y > H + 30*DPR || d.x < -60*DPR) drops[i] = newDrop(false);
+      }
+    }
+
+    /* lens beads — water sitting on the glass */
+    if (wet > 0.001){
+      for (var j=0;j<beads.length;j++){
+        var b = beads[j];
+
+        ctx.globalAlpha = b.a * wet;
+        /* Offset highlight plus a darker lower edge — a droplet acts as a
+           tiny lens, bright where light enters and dense at its base. */
+        var g = ctx.createRadialGradient(b.x - b.r*.34, b.y - b.r*.34, b.r*.08, b.x, b.y, b.r);
+        g.addColorStop(0,'rgba(255,255,255,.95)');
+        g.addColorStop(.35,'rgba(214,234,248,.55)');
+        g.addColorStop(.78,'rgba(150,182,205,.28)');
+        g.addColorStop(1,'rgba(110,140,165,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,6.2832); ctx.fill();
+        /* specular pin — what actually sells it as water rather than fog */
+        if (b.r > 7*DPR){
+          ctx.globalAlpha = b.a * wet * 1.15;
+          ctx.fillStyle = 'rgba(255,255,255,.9)';
+          ctx.beginPath();
+          ctx.arc(b.x - b.r*.36, b.y - b.r*.38, Math.max(0.7*DPR, b.r*.14), 0, 6.2832);
+          ctx.fill();
+        }
+
+        if (b.hold > 0 && wind < 0.02){
+          /* idling: surface tension holds it, with a faint wobble */
+          b.hold--;
+          b.wob += 0.03;
+          b.x += Math.sin(b.wob) * 0.05 * DPR;
+        } else {
+          /* Released, or torn loose by airflow. Wind pushes a bead
+             sideways and up over the housing; gravity pulls it down.
+             Larger beads catch more air, so they leave first and fastest. */
+          var area = b.r / (10*DPR);
+          b.vy += b.grav - wind * 0.5 * DPR * area;
+          b.vx -= wind * 0.85 * DPR * area;
+          b.x += b.vx;
+          b.y += b.vy;
+
+          var speed = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
+          b.trail = Math.min(46*DPR, b.trail + speed*0.55);
+
+          /* the trail smears along travel, not just straight down */
+          ctx.globalAlpha = b.a * wet * .55;
+          ctx.save();
+          ctx.translate(b.x, b.y);
+          ctx.rotate(Math.atan2(b.vy, b.vx) - Math.PI/2);
+          ctx.fillStyle = 'rgba(200,224,240,.9)';
+          ctx.fillRect(-b.r*.16, 0, b.r*.32, b.trail);
+          ctx.restore();
+
+          var gone = b.y - b.r > H || b.y + b.r < 0 || b.x + b.r < 0;
+          if (gone) beads[j] = wind > 0.02 ? offscreenBead(b) : newBead(false);
+        }
+      }
+    }
+
+    /* grain */
+    if (grainFrames.length){
+      if (now - gswap > 70){ gi = (gi+1) % grainFrames.length; gswap = now; }
+      ctx.globalAlpha = 1;
+      var gp = ctx.createPattern(grainFrames[gi],'repeat');
+      ctx.fillStyle = gp;
+      ctx.fillRect(0,0,W,H);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  /* ============================================================
+     BOOT
+     ============================================================ */
+  function boot(){
+    sizeFx();
+    bakeGrain();
+    if (!reduced) requestAnimationFrame(drawFx);
+    startLoop();
+
+    /* Lift the veil only once the loop has a frame to show, so we never
+       dissolve from black to black. The poster covers the gap if the video
+       is slow, and a timeout guarantees we never strand the visitor behind
+       an opaque screen if it fails outright. */
+    var veil = document.getElementById('veil');
+    var lifted = false;
+    function lift(){
+      if (lifted) return;
+      lifted = true;
+      requestAnimationFrame(function(){ veil.classList.add('lift'); });
+    }
+    if (vLoop.readyState >= 2) lift();
+    else vLoop.addEventListener('loadeddata', lift, {once:true});
+    setTimeout(lift, 1800);
+  }
+
+  var rs;
+  window.addEventListener('resize', function(){
+    clearTimeout(rs);
+    rs = setTimeout(function(){
+      sizeFx();
+      if (state === 'drive'){ target = scrollProgress(); kick(); }
+    }, 160);
+  });
+
+  vDrive.addEventListener('loadedmetadata', function(){
+    frameCount = Math.max(1, Math.round(vDrive.duration * FPS));
+    sizeRunway();
+    kick();
+  });
+
+  /* iOS occasionally drops a paused-and-seeked video's frame when the tab
+     is restored. Nudging currentTime forces it to repaint. */
+  document.addEventListener('visibilitychange', function(){
+    if (!document.hidden && state === 'drive' && vDrive.duration){
+      try { vDrive.currentTime = Math.min(vDrive.duration - .05, vDrive.currentTime + .001); } catch(e){}
+    }
+  });
+
+  if (document.readyState === 'complete') boot();
+  else window.addEventListener('load', boot);
+})();
+</script>
+</body>
+</html>
