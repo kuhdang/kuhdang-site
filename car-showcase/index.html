@@ -608,11 +608,21 @@
      generated footage never produced convincing lens droplets, and its
      rain thins out whenever a shot faces a lit street. Here the density
      is constant regardless of what any individual clip is doing.
+
+     Droplets are real optics, not colored circles: each one clips a
+     magnified, slightly offset sample of the actual frame behind it and
+     draws that inside its own outline, so the neon and sodium practicals
+     genuinely bend through the water the way they do on a real lens.
+     Combined with mix-blend-mode:screen on the whole canvas, dark video
+     stays invisible and only the light — streetlights, wet-road glints —
+     blooms inside each drop, which is exactly the right failure mode:
+     water lenses light, it doesn't paint shadow.
      ============================================================ */
   var fx = document.getElementById('fx');
   var ctx = fx.getContext('2d', {alpha:true});
   var W = 0, H = 0, DPR = 1;
   var beads = [];
+  var cov = null;   /* object-fit:cover source rect on vLoop, cached */
 
   /* Water is an Act 1 state. `blowing` starts the moment the car launches
      and never resets — once the lens is clear, it stays clear. */
@@ -621,8 +631,23 @@
   /* A bead that has been blown off is parked off-frame rather than
      respawned, so the glass genuinely empties instead of recycling. */
   function offscreenBead(b){
-    b.x = -9999; b.y = -9999; b.vx = b.vy = 0; b.trail = 0; b.a = 0;
+    b.x = -9999; b.y = -9999; b.vx = b.vy = 0; b.a = 0; b.trailPts.length = 0;
     return b;
+  }
+
+  /* Mirrors the CSS `object-fit:cover` (+ the 58%-center mobile crop) so
+     the refraction sample comes from the same patch of frame the viewer
+     is actually looking at behind the drop, not an arbitrary corner of
+     the source video. */
+  function sizeCover(){
+    var vw = vLoop.videoWidth, vh = vLoop.videoHeight;
+    if (!vw || !vh){ cov = null; return; }
+    var portrait = matchMedia('(max-aspect-ratio:1/1)').matches;
+    var posX = portrait ? 0.58 : 0.5, posY = 0.5;
+    var vAR = vw / vh, dAR = W / H, sw, sh, sx, sy;
+    if (vAR > dAR){ sh = vh; sw = vh * dAR; sx = (vw - sw) * posX; sy = 0; }
+    else          { sw = vw; sh = vw / dAR; sx = 0; sy = (vh - sh) * posY; }
+    cov = {sx:sx, sy:sy, sw:sw, sh:sh};
   }
 
   function sizeFx(){
@@ -631,6 +656,7 @@
     H = fx.height = Math.floor(innerHeight * DPR);
     fx.style.width = innerWidth + 'px';
     fx.style.height = innerHeight + 'px';
+    sizeCover();
     seed();
   }
 
@@ -650,7 +676,13 @@
      rather than a flat range: mostly fine mist, a few mid drops, the
      occasional fat one. Real glass in rain looks like that, and a flat
      range reads as noise. Bigger drops are heavier, so they hold on
-     less and run faster once they go. */
+     less and run faster once they go.
+
+     Each bead also gets a fixed, random outline — a ring of radius
+     multipliers baked once at creation — so idle drops read as small
+     irregular blobs instead of perfect circles. Baking it once (rather
+     than jittering every frame) keeps the outline from shimmering; real
+     surface tension holds a stable, if lumpy, shape. */
   function newBead(atTop){
     var roll = Math.random(), r;
     if (roll < .58)      r = 3 + Math.random()*5;    /* fine mist   */
@@ -658,17 +690,82 @@
     else                 r = 17 + Math.random()*15;  /* fat drops   */
     r *= DPR;
     var heavy = r / (32*DPR);                        /* 0..1 mass    */
+    var pts = 6 + Math.floor(Math.random()*3);       /* 6-8 lobes    */
+    var shape = [];
+    for (var i=0;i<pts;i++) shape.push(0.82 + Math.random()*0.34);
     return {
       x: Math.random()*W,
       y: atTop ? Math.random()*H*0.4 : Math.random()*H,
       r: r,
-      a: 0.13 + Math.random()*0.16 + heavy*0.16,
+      a: 0.16 + Math.random()*0.18 + heavy*0.18,
       vx: 0, vy: 0,
       grav: (0.02 + heavy*0.10) * DPR,               /* heavier runs sooner */
       hold: (1 - heavy) * (120 + Math.random()*680), /* light ones cling    */
-      trail: 0,
-      wob: Math.random()*6.28
+      wob: Math.random()*6.28,
+      shape: shape,
+      trailPts: []                                   /* recent positions, for the wet streak */
     };
+  }
+
+  /* Traces a smooth closed blob through `shape`'s radius multipliers —
+     quadratic curves through each edge's midpoint round the lobes off so
+     the result reads as lumpy water, not a gear. `stretchY` elongates it
+     vertically, used to make a resting drop look slightly teardrop-heavy
+     even before it starts running. */
+  function blobPath(cx, cy, r, shape, stretchY){
+    var n = shape.length, pts = [];
+    for (var i=0;i<n;i++){
+      var ang = (i/n) * Math.PI * 2;
+      pts.push([
+        cx + Math.cos(ang) * r * shape[i],
+        cy + Math.sin(ang) * r * shape[i] * (1 + stretchY)
+      ]);
+    }
+    ctx.beginPath();
+    var mid0 = [(pts[0][0]+pts[n-1][0])/2, (pts[0][1]+pts[n-1][1])/2];
+    ctx.moveTo(mid0[0], mid0[1]);
+    for (var j=0;j<n;j++){
+      var p1 = pts[j], p2 = pts[(j+1)%n];
+      ctx.quadraticCurveTo(p1[0], p1[1], (p1[0]+p2[0])/2, (p1[1]+p2[1])/2);
+    }
+    ctx.closePath();
+  }
+
+  /* A running drop's body: a rounded head with a point trailing back
+     along its direction of travel, drawn in the drop's own local frame
+     (+y = forward) then rotated to match velocity. This is what a real
+     droplet running down glass looks like — not a circle towing a
+     rectangle, a single continuous shape that narrows toward the tail. */
+  function teardropPath(cx, cy, r, angle, len){
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle + Math.PI/2);
+    ctx.beginPath();
+    ctx.moveTo(0, r*0.92);
+    ctx.bezierCurveTo(r*1.05, r*0.68,  r*0.95, -len*0.32, 0, -len);
+    ctx.bezierCurveTo(-r*0.95, -len*0.32, -r*1.05, r*0.68, 0, r*0.92);
+    ctx.closePath();
+    ctx.restore();
+  }
+
+  /* Clips to whatever path is already current on `ctx` and paints a
+     magnified, slightly offset sample of the live frame inside it — the
+     actual refraction. Skipped for the smallest mist motes: at that size
+     it's imperceptible and it's the single most expensive draw call per
+     bead, so this is where the frame budget goes. */
+  function refract(cx, cy, r, ox, oy){
+    if (!cov || r < 6*DPR) return;
+    ctx.save();
+    ctx.clip();
+    var mag = 1.85;
+    var vx = cov.sx + ((cx+ox)/W) * cov.sw;
+    var vy = cov.sy + ((cy+oy)/H) * cov.sh;
+    var size = (r*2) * (cov.sw/W) / mag;
+    ctx.globalAlpha = Math.min(1, ctx.globalAlpha * 1.9);
+    try {
+      ctx.drawImage(vLoop, vx-size/2, vy-size/2, size, size, cx-r, cy-r, r*2, r*2);
+    } catch(e){ /* video not decodable yet this frame — skip, not fatal */ }
+    ctx.restore();
   }
 
   var grain = document.createElement('canvas');
@@ -713,17 +810,62 @@
     if (wet > 0.001){
       for (var j=0;j<beads.length;j++){
         var b = beads[j];
+        var running = !(b.hold > 0 && wind < 0.02);
 
+        /* --- wet streak: a fading chain of shrinking stamps left where
+           the drop has already passed, not a solid rectangle. Each stamp
+           is a soft small blob, so the streak looks like clinging water
+           rather than a drawn line. Aged out from the tail forward. */
+        for (var k=0;k<b.trailPts.length;k++){
+          var tp = b.trailPts[k];
+          tp.age += 1;
+          var life = 1 - tp.age / tp.life;
+          if (life <= 0) continue;
+          ctx.globalAlpha = b.a * wet * life * .5;
+          var tg = ctx.createRadialGradient(tp.x,tp.y,0,tp.x,tp.y,tp.r);
+          tg.addColorStop(0,'rgba(210,230,245,.85)');
+          tg.addColorStop(1,'rgba(150,182,205,0)');
+          ctx.fillStyle = tg;
+          ctx.beginPath(); ctx.arc(tp.x,tp.y,tp.r,0,6.2832); ctx.fill();
+        }
+        while (b.trailPts.length && b.trailPts[0].age >= b.trailPts[0].life) b.trailPts.shift();
+
+        /* --- the drop body itself --- */
         ctx.globalAlpha = b.a * wet;
-        /* Offset highlight plus a darker lower edge — a droplet acts as a
-           tiny lens, bright where light enters and dense at its base. */
-        var g = ctx.createRadialGradient(b.x - b.r*.34, b.y - b.r*.34, b.r*.08, b.x, b.y, b.r);
-        g.addColorStop(0,'rgba(255,255,255,.95)');
-        g.addColorStop(.35,'rgba(214,234,248,.55)');
-        g.addColorStop(.78,'rgba(150,182,205,.28)');
-        g.addColorStop(1,'rgba(110,140,165,0)');
+        if (!running){
+          blobPath(b.x, b.y, b.r, b.shape, 0.06);
+        } else {
+          var ang = Math.atan2(b.vy, b.vx);
+          var speed = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
+          var len = b.r * (1.5 + Math.min(2.2, speed*0.35));
+          teardropPath(b.x, b.y, b.r, ang, len);
+        }
+        var refracted = !!cov && b.r >= 6*DPR;
+        refract(b.x, b.y, b.r, -b.r*.15, -b.r*.15);
+        /* Glass shading. The path is still the one built above — refract()
+           clips and restores without touching the current path. Where a
+           refraction sample was drawn, this stays a thin, mostly-clear
+           veil: the actual bent scene is the point, and a heavy milky fill
+           on top of it just paints back over the thing that makes it read
+           as glass instead of a sticker. Only bare mist motes below the
+           refraction cutoff (too small to carry a sample) fall back to a
+           fuller gradient, since otherwise they'd be near-invisible over
+           anything dark — canvas is screen-blended onto the page, so it
+           can only ever add light here, never darken. */
+        var g = ctx.createRadialGradient(b.x - b.r*.34, b.y - b.r*.34, b.r*.08, b.x, b.y, b.r*1.05);
+        if (refracted){
+          g.addColorStop(0,'rgba(255,255,255,.28)');
+          g.addColorStop(.45,'rgba(214,234,248,.12)');
+          g.addColorStop(.8,'rgba(170,196,218,.16)');
+          g.addColorStop(1,'rgba(110,140,165,0)');
+        } else {
+          g.addColorStop(0,'rgba(255,255,255,.85)');
+          g.addColorStop(.35,'rgba(214,234,248,.42)');
+          g.addColorStop(.78,'rgba(150,182,205,.22)');
+          g.addColorStop(1,'rgba(110,140,165,0)');
+        }
         ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(b.x,b.y,b.r,0,6.2832); ctx.fill();
+        ctx.fill();
         /* specular pin — what actually sells it as water rather than fog */
         if (b.r > 7*DPR){
           ctx.globalAlpha = b.a * wet * 1.15;
@@ -731,9 +873,14 @@
           ctx.beginPath();
           ctx.arc(b.x - b.r*.36, b.y - b.r*.38, Math.max(0.7*DPR, b.r*.14), 0, 6.2832);
           ctx.fill();
+          /* a second, dimmer pin: real drops rarely show just one glint */
+          ctx.globalAlpha = b.a * wet * .5;
+          ctx.beginPath();
+          ctx.arc(b.x + b.r*.22, b.y + b.r*.3, Math.max(0.5*DPR, b.r*.08), 0, 6.2832);
+          ctx.fill();
         }
 
-        if (b.hold > 0 && wind < 0.02){
+        if (!running){
           /* idling: surface tension holds it, with a faint wobble */
           b.hold--;
           b.wob += 0.03;
@@ -748,17 +895,10 @@
           b.x += b.vx;
           b.y += b.vy;
 
-          var speed = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
-          b.trail = Math.min(46*DPR, b.trail + speed*0.55);
-
-          /* the trail smears along travel, not just straight down */
-          ctx.globalAlpha = b.a * wet * .55;
-          ctx.save();
-          ctx.translate(b.x, b.y);
-          ctx.rotate(Math.atan2(b.vy, b.vx) - Math.PI/2);
-          ctx.fillStyle = 'rgba(200,224,240,.9)';
-          ctx.fillRect(-b.r*.16, 0, b.r*.32, b.trail);
-          ctx.restore();
+          if (Math.sqrt(b.vx*b.vx + b.vy*b.vy) > 0.25*DPR){
+            b.trailPts.push({x:b.x, y:b.y, r:b.r*0.6, age:0, life:14});
+            if (b.trailPts.length > 12) b.trailPts.shift();
+          }
 
           var gone = b.y - b.r > H || b.y + b.r < 0 || b.x + b.r < 0;
           if (gone) beads[j] = wind > 0.02 ? offscreenBead(b) : newBead(false);
@@ -800,6 +940,13 @@
     if (vLoop.readyState >= 2) lift();
     else vLoop.addEventListener('loadeddata', lift, {once:true});
     setTimeout(lift, 1800);
+
+    /* Refraction needs vLoop's natural size, which isn't known until it
+       has data — sizeFx() above likely ran before that, so recompute the
+       cover-crop rect once dimensions exist rather than leaving beads
+       stuck sampling nothing. */
+    if (vLoop.videoWidth) sizeCover();
+    else vLoop.addEventListener('loadeddata', sizeCover, {once:true});
   }
 
   var rs;
