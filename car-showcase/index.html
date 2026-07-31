@@ -371,11 +371,11 @@
   var wheelSeen = false;
 
   /* Frames advanced per wheel notch. One frame per notch was precise but
-     meant ~387 notches to cross Act 3 — accurate and exhausting. Eight cuts
-     that to ~48. The mapping being coarse does not cost smoothness, because
+     meant ~387 notches to cross Act 3 — accurate and exhausting. Sixteen cuts
+     that to ~24. The mapping being coarse does not cost smoothness, because
      that comes from the frame-quantised seek below plus the momentum glide
-     spreading each notch over time rather than jumping it. */
-  var FRAMES_PER_NOTCH = 8;
+     spreading each notch over seconds rather than jumping it. */
+  var FRAMES_PER_NOTCH = 16;
 
   function sizeRunway(){
     if (!frameCount) return;
