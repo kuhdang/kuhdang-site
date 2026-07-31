@@ -206,6 +206,16 @@
      to be killed too or the launch hint never actually leaves. */
   .hidden{opacity:0 !important;pointer-events:none;animation:none !important}
 
+  /* Arrives opaque and lifts on load, so the black the card faded into and
+     the black this page starts on are the same black. Sits above the video
+     but below the UI, so the chrome fades up with the picture. */
+  #veil{
+    position:fixed; inset:0; background:#000; z-index:7;
+    pointer-events:none; opacity:1;
+    transition:opacity .9s cubic-bezier(.4,0,.2,1);
+  }
+  #veil.lift{opacity:0}
+
   @media (prefers-reduced-motion:reduce){
     .pulse{animation:none}
     .stat{transition:opacity .2s linear;transform:none}
@@ -234,6 +244,7 @@
 
 <canvas id="fx"></canvas>
 <div class="vignette"></div>
+<div id="veil"></div>
 
 <div class="ui title" id="title">
   <b>911 GT3 RS</b>
@@ -742,6 +753,21 @@
     bakeGrain();
     if (!reduced) requestAnimationFrame(drawFx);
     startLoop();
+
+    /* Lift the veil only once the loop has a frame to show, so we never
+       dissolve from black to black. The poster covers the gap if the video
+       is slow, and a timeout guarantees we never strand the visitor behind
+       an opaque screen if it fails outright. */
+    var veil = document.getElementById('veil');
+    var lifted = false;
+    function lift(){
+      if (lifted) return;
+      lifted = true;
+      requestAnimationFrame(function(){ veil.classList.add('lift'); });
+    }
+    if (vLoop.readyState >= 2) lift();
+    else vLoop.addEventListener('loadeddata', lift, {once:true});
+    setTimeout(lift, 1800);
   }
 
   var rs;

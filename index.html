@@ -940,7 +940,7 @@
       { id: 'travelling', title: 'Travelling', tag: '', note: '' }
     ]},
     goals: { title: "Goals", sub: [] },
-    relationships: { title: "Relationships", sub: [] },
+    porsche: { title: "Porsche", sub: [], href: '/car-showcase/' },
     building: { title: "What I'm Building", sub: [
       { id: 'this', title: 'This Site', tag: '', note: '' },
       { id: 'ecom', title: 'Ecom', tag: '', note: '' }
@@ -995,6 +995,13 @@
         showView('contact');
       } else if (slug === 'dangcube') {
         showView('cube');
+      } else if (topics[slug] && topics[slug].href) {
+        // Standalone page, not an internal view — hand straight over rather
+        // than rendering an empty topic behind it. `replace` keeps the empty
+        // stop out of history so Back returns to wherever they actually came
+        // from.
+        location.replace(topics[slug].href);
+        return;
       } else if (detailAliases[slug]) {
         const { topic, sub } = detailAliases[slug];
         const s = topics[topic].sub.find(x => x.id === sub);
@@ -1338,7 +1345,24 @@
       setPath('/dangcube');
       return showView('cube', crossfade);
     }
+    // Topics that hand off to a standalone page instead of an internal view.
+    // The card's own zoom has already played by the time we get here, so we
+    // only need to carry the screen to black — the destination fades up from
+    // black on its own, which keeps it reading as one continuous move rather
+    // than a page load.
+    const t = topics[key];
+    if (t && t.href) return leaveTo(t.href);
     return goToTopic(key, crossfade);
+  }
+
+  function leaveTo(href) {
+    const veil = document.createElement('div');
+    veil.style.cssText =
+      'position:fixed;inset:0;background:#000;opacity:0;z-index:9999;' +
+      'pointer-events:none;transition:opacity .42s ease';
+    document.body.appendChild(veil);
+    requestAnimationFrame(() => { veil.style.opacity = '1'; });
+    setTimeout(() => { location.href = href; }, 430);
   }
 
   function buildExploreGrid() {
