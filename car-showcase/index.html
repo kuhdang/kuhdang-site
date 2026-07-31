@@ -886,12 +886,29 @@
           b.wob += 0.03;
           b.x += Math.sin(b.wob) * 0.05 * DPR;
         } else {
-          /* Released, or torn loose by airflow. Wind pushes a bead
-             sideways and up over the housing; gravity pulls it down.
-             Larger beads catch more air, so they leave first and fastest. */
+          /* Released, or torn loose by airflow. Direction here isn't
+             arbitrary — it's keyed to what actually happens on screen in
+             act2-launch.mp4. The car blasts past close enough to fill the
+             frame, and the camera whip-pans to follow it: background
+             highlights streak screen-right during that pan (visible in the
+             footage as the motion-blur trail across the roofline at
+             t≈3.6s), so that's a gust, not a generic breeze — it should
+             throw loose water rightward and slightly up, same as anything
+             light gets flung outward when a vehicle screams past close by.
+             Only once the whip lands and the car settles into driving away
+             (the back half of the blow ramp) does the camera fall in
+             behind it and start actually chasing — from then on the
+             dominant force is forward-flight airflow over the housing,
+             which reinforces gravity (strips water straight down and off
+             the bottom edge) rather than fighting it, continuing rightward
+             rather than reversing since the airflow never changes source.
+             Larger beads catch more air either way, so they leave first
+             and fastest. */
           var area = b.r / (10*DPR);
-          b.vy += b.grav - wind * 0.5 * DPR * area;
-          b.vx -= wind * 0.85 * DPR * area;
+          var gust  = Math.max(0, 1 - blow * 2.2);   /* the close pass + whip  */
+          var chase = Math.min(1, blow * 1.35);      /* settled in, now chasing */
+          b.vy += b.grav + wind * DPR * area * (0.55*chase - 0.45*gust);
+          b.vx += wind * DPR * area * (0.95*gust + 0.20*chase);
           b.x += b.vx;
           b.y += b.vy;
 
