@@ -187,6 +187,36 @@
     .p-bl,.p-br{bottom:18vh}
   }
 
+  /* ---------- Act 3 entry cue ---------- */
+  /* The one moment the piece needs to tell you something, so it says it
+     once, in the middle, and gets out of the way the instant you act on it. */
+  .cue{
+    position:fixed; left:50%; top:50%;
+    transform:translate(-50%,-50%) scale(.96);
+    z-index:11; pointer-events:none;
+    text-align:center; white-space:nowrap;
+    font-size:clamp(20px,4.6vw,50px);
+    letter-spacing:.26em; text-transform:uppercase;
+    color:#fff; font-weight:400;
+    text-shadow:0 2px 24px rgba(0,0,0,.92), 0 0 70px rgba(0,0,0,.75);
+    opacity:0;
+    transition:opacity .45s var(--ease), transform .8s var(--ease);
+  }
+  .cue.on{
+    opacity:1; transform:translate(-50%,-50%) scale(1);
+    animation:blip 2.2s ease-in-out .55s infinite;
+  }
+  /* Dismisses upward — the same direction the content is about to travel. */
+  .cue.off{
+    opacity:0 !important;
+    transform:translate(-50%,-72%) scale(.98);
+    animation:none !important;
+  }
+  @keyframes blip{
+    0%,100%{opacity:.5}
+    50%{opacity:1}
+  }
+
   /* ---------- progress ---------- */
   .prog{
     position:fixed; left:0; right:0; bottom:0; height:1px;
@@ -263,6 +293,8 @@
   <span class="k">or press space</span>
 </div>
 
+<div class="cue" id="cue">Scroll to explore</div>
+
 <div class="prog" id="prog"><i id="progBar"></i></div>
 
 <div id="stats"></div>
@@ -285,6 +317,7 @@
   var runway  = document.getElementById('runway');
   var prog    = document.getElementById('prog');
   var progBar = document.getElementById('progBar');
+  var cue     = document.getElementById('cue');
   var bed     = document.getElementById('bed');
   var soundBtn= document.getElementById('sound');
   var soundLbl= document.getElementById('soundLabel');
@@ -337,17 +370,32 @@
   var isWheel = false;
   var wheelSeen = false;
 
+  /* Frames advanced per wheel notch. One frame per notch was precise but
+     meant ~387 notches to cross Act 3 — accurate and exhausting. Four keeps
+     the motion continuous while cutting the effort to a quarter, because
+     smoothness comes from the frame-quantised seek below, not from the
+     mapping being 1:1. */
+  var FRAMES_PER_NOTCH = 4;
+
   function sizeRunway(){
     if (!frameCount) return;
     if (isWheel){
-      /* one notch : one frame */
-      runway.style.height = (frameCount * wheelPx + window.innerHeight) + 'px';
+      runway.style.height =
+        Math.round(frameCount / FRAMES_PER_NOTCH * wheelPx + window.innerHeight) + 'px';
     } else {
       runway.style.height = '';                       /* fall back to CSS */
       document.documentElement.style.setProperty('--scrub-vh', isTouch ? '520' : '760');
     }
     if (state === 'drive'){ target = scrollProgress(); kick(); }
   }
+
+  /* Dismiss on the input itself, not just the resulting scroll — a finger
+     already dragging shouldn't still be reading an instruction. */
+  ['wheel','touchmove','keydown'].forEach(function(evt){
+    window.addEventListener(evt, function(){
+      if (state === 'drive') dismissCue();
+    }, {passive:true});
+  });
 
   window.addEventListener('wheel', function(e){
     if (wheelSeen) return;
@@ -417,8 +465,21 @@
 
   function kick(){ if (raf === null) raf = requestAnimationFrame(tick); }
 
+  var cueDone = false;
+  function dismissCue(){
+    if (cueDone) return;
+    cueDone = true;
+    cue.classList.remove('on');
+    cue.classList.add('off');
+    subtitle.textContent = 'Scroll to explore';
+  }
+
   window.addEventListener('scroll', function(){
     if (state !== 'drive') return;
+    /* Any real movement counts as "they got it" — including a scroll that
+       lands back at zero, which is why this keys off the event, not the
+       position. */
+    dismissCue();
     target = scrollProgress();
     kick();
   }, {passive:true});
@@ -480,8 +541,12 @@
     if (state === 'drive') return;
     state = 'drive';
 
-    subtitle.textContent = 'Scroll to explore';
+    /* The corner label stays quiet while the centre cue is up — two copies
+       of the same instruction on screen at once just reads as clutter. It
+       takes over once the cue has been dismissed. */
+    subtitle.textContent = '';
     prog.classList.add('on');
+    setTimeout(function(){ if (!cueDone) cue.classList.add('on'); }, 260);
 
     vDrive.currentTime = 0;
     driveReady = true;
