@@ -109,24 +109,6 @@
   }
   .back:hover{color:var(--ink)}
 
-  .sound{
-    right:clamp(18px,4vw,44px); bottom:clamp(18px,4vh,40px);
-    display:flex; align-items:center; gap:9px;
-    font-size:10px; letter-spacing:.22em; text-transform:uppercase;
-    color:var(--dim);
-    background:none; border:0; font-family:inherit;
-    cursor:pointer; pointer-events:auto;
-    padding:10px 2px;
-    transition:color .3s;
-  }
-  .sound:hover{color:var(--ink)}
-  .bars{display:flex;align-items:flex-end;gap:2px;height:11px}
-  .bars i{width:2px;height:3px;background:currentColor;display:block;transition:height .2s}
-  .sound.on .bars i:nth-child(1){height:5px;animation:eq .9s ease-in-out infinite}
-  .sound.on .bars i:nth-child(2){height:11px;animation:eq .9s ease-in-out .15s infinite}
-  .sound.on .bars i:nth-child(3){height:7px;animation:eq .9s ease-in-out .3s infinite}
-  @keyframes eq{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
-
   /* ---------- stats ---------- */
   .stat{
     position:fixed; z-index:9; pointer-events:none;
@@ -283,11 +265,6 @@
 
 <a class="ui back" href="../">← kuhdang</a>
 
-<button class="ui sound" id="sound" aria-pressed="false">
-  <span class="bars"><i></i><i></i><i></i></span>
-  <span id="soundLabel">Sound off</span>
-</button>
-
 <div class="ui hint pulse" id="hint">
   Click to launch
   <span class="k">or press space</span>
@@ -300,8 +277,6 @@
 <div id="stats"></div>
 
 <div id="runway"></div>
-
-<audio id="bed" src="assets/hero-loop-audio.m4a" loop preload="auto"></audio>
 
 <script>
 (function(){
@@ -318,9 +293,6 @@
   var prog    = document.getElementById('prog');
   var progBar = document.getElementById('progBar');
   var cue     = document.getElementById('cue');
-  var bed     = document.getElementById('bed');
-  var soundBtn= document.getElementById('sound');
-  var soundLbl= document.getElementById('soundLabel');
   var statsEl = document.getElementById('stats');
 
   var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -630,37 +602,6 @@
   });
 
   /* ============================================================
-     AUDIO — one continuous bed.
-     Deliberately not baked into the clips: scrubbing Act 3 would shred
-     baked audio. Running it as an independent loop means the sound never
-     cuts at an act boundary, mirroring the visual overlay.
-     ============================================================ */
-  var soundOn = false;
-  bed.volume = 0;
-  soundBtn.addEventListener('click', function(e){
-    e.stopPropagation();
-    soundOn = !soundOn;
-    soundBtn.classList.toggle('on', soundOn);
-    soundBtn.setAttribute('aria-pressed', String(soundOn));
-    soundLbl.textContent = soundOn ? 'Sound on' : 'Sound off';
-    if (soundOn){
-      bed.play().catch(function(){});
-      ramp(0.55);
-    } else {
-      ramp(0, function(){ bed.pause(); });
-    }
-  });
-
-  function ramp(to, done){
-    var from = bed.volume, t0 = performance.now(), dur = 600;
-    (function step(now){
-      var k = Math.min(1, (now - t0) / dur);
-      bed.volume = from + (to - from) * k;
-      if (k < 1) requestAnimationFrame(step); else if (done) done();
-    })(performance.now());
-  }
-
-  /* ============================================================
      FX — grain + rain + lens droplets.
      This is the layer that carries the treatment's "physical camera"
      language across all three acts. It also does real repair work: the
@@ -671,7 +612,7 @@
   var fx = document.getElementById('fx');
   var ctx = fx.getContext('2d', {alpha:true});
   var W = 0, H = 0, DPR = 1;
-  var drops = [], beads = [];
+  var beads = [];
 
   /* Water is an Act 1 state. `blowing` starts the moment the car launches
      and never resets — once the lens is clear, it stays clear. */
@@ -693,27 +634,16 @@
     seed();
   }
 
+  /* Only water on the glass. The falling-rain streaks were removed: the
+     footage already carries its own rain, and a second set of synthetic
+     vertical lines over the top read as an effect rather than as weather.
+     Beads stay because they are the one thing the generation never gave
+     us — water sitting on a physical lens. */
   function seed(){
     var area = (innerWidth * innerHeight) / 1000;
-    var n = Math.min(340, Math.max(120, Math.round(area * 0.42)));
-    drops = [];
-    for (var i=0;i<n;i++) drops.push(newDrop(true));
-
     beads = [];
-    var b = Math.min(110, Math.max(38, Math.round(area * 0.12)));
+    var b = Math.min(150, Math.max(52, Math.round(area * 0.17)));
     for (var j=0;j<b;j++) beads.push(newBead(false));
-  }
-
-  function newDrop(anywhere){
-    return {
-      x: Math.random() * W,
-      y: anywhere ? Math.random() * H : -20 * DPR,
-      len: (8 + Math.random()*26) * DPR,
-      sp:  (7 + Math.random()*13) * DPR,
-      sl:  (-1.6 + Math.random()*0.9) * DPR,
-      a:   0.10 + Math.random()*0.30,
-      w:   Math.random() < .75 ? 1*DPR : 1.6*DPR
-    };
   }
 
   /* Beads sit ON the lens. Size is drawn from a weighted distribution
@@ -778,26 +708,6 @@
     if (blowing && blow < 1) blow = Math.min(1, blow + 0.0075);
     var wet = 1 - blow;                       /* how much water remains */
     var wind = blow * blow;                   /* force ramps in, not linear */
-
-    /* falling rain, in front of the lens */
-    if (wet > 0.001){
-      ctx.lineCap = 'round';
-      for (var i=0;i<drops.length;i++){
-        var d = drops[i];
-        ctx.globalAlpha = d.a * wet;
-        ctx.strokeStyle = '#cfe2ef';
-        ctx.lineWidth = d.w;
-        /* under airflow the fall angle shears and the streaks stretch */
-        var shear = wind * 26 * DPR;
-        ctx.beginPath();
-        ctx.moveTo(d.x, d.y);
-        ctx.lineTo(d.x + d.sl - shear, d.y + d.len * (1 + wind*1.8));
-        ctx.stroke();
-        d.y += d.sp * (1 + wind*2.2);
-        d.x += d.sl * 0.35 - wind * 9 * DPR;
-        if (d.y > H + 30*DPR || d.x < -60*DPR) drops[i] = newDrop(false);
-      }
-    }
 
     /* lens beads — water sitting on the glass */
     if (wet > 0.001){
