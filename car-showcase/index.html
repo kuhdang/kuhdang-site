@@ -651,9 +651,11 @@
   var beads = [], runners = [];
   var cov = null;   /* object-fit:cover source rect on vLoop, cached */
 
-  /* Field density. Tuned by eye against the Act 1 plate — full strength put
-     too much water in front of the car, which is the subject. */
-  var DENSITY = 0.80;
+  /* Field density. Deliberately traded down from 0.80: every drop is now
+     simulated individually through the launch rather than the mist riding a
+     baked layer, and that is what the smooth blow-off costs. Losing water is
+     the better half of that trade — the motion is the thing people notice. */
+  var DENSITY = 0.40;
 
   /* ---- per-frame source texture ----
      Every drop samples the frame behind it, and sampling a <video> element
@@ -782,7 +784,10 @@
     for (k=0;k<nMid; k++) beads.push(newBead(place(), 2.6, 8.5, 1.35));
     for (k=0;k<nFat; k++) beads.push(newBead(place(), 8.5, 20,  2.2));
 
-    var nRun = Math.max(2, Math.round(innerWidth/210 * DENSITY));
+    /* Runners scale more gently than the field: they are the only thing
+       moving before the launch, so thinning them out with everything else
+       would leave the glass looking dead. */
+    var nRun = Math.max(2, Math.round(innerWidth/210 * DENSITY * 1.6));
     for (k=0;k<nRun;k++) runners.push(newRunner(true));
 
     mistOK = false; mistDX = 0; mistDY = 0;
@@ -1162,33 +1167,33 @@
 
   /* Runners advance whether or not the lens is being blown clear — they are
      the one thing on the glass that is always in motion. */
-  function stepRunners(k, wind, gust, chase){
+  function stepRunners(dt, wind, gust, chase){
     for (var i=0;i<runners.length;i++){
       var rn = runners[i];
       if (rn.x < -9000) continue;
 
       if (rn.stall > 0 && wind < 0.02){
-        rn.stall -= k;
-        rn.wob += 0.05 * k;
-        rn.x += Math.sin(rn.wob)*0.06*DPR*k;
+        rn.stall -= dt;
+        rn.wob += 0.05 * dt;
+        rn.x += Math.sin(rn.wob)*0.06*DPR*dt;
         if (rn.stall <= 0){ rn.stall = 0; rn.vy = Math.max(rn.vy, 0.5*DPR); }
         continue;
       }
 
-      rn.vy += 0.035*DPR*k;
+      rn.vy += 0.035*DPR*dt;
       if (wind > 0){
         var area = rn.r/(10*DPR);
-        rn.vy += wind*DPR*area*(0.55*chase - 0.45*gust)*k;
-        rn.vx += wind*DPR*area*(0.95*gust + 0.20*chase)*k;
+        rn.vy += wind*DPR*area*(0.55*chase - 0.45*gust)*dt;
+        rn.vx += wind*DPR*area*(0.95*gust + 0.20*chase)*dt;
       }
       rn.vy = Math.min(rn.vy, 5.5*DPR);
 
       /* Friction is exponential, so it decays by k steps rather than once. */
-      rn.drift = rn.drift*Math.pow(0.86, k) + (Math.random()-0.5)*0.20*DPR*k;
-      rn.x += (rn.drift + rn.vx) * k;
-      rn.y += rn.vy * k;
+      rn.drift = rn.drift*Math.pow(0.86, dt) + (Math.random()-0.5)*0.20*DPR*dt;
+      rn.x += (rn.drift + rn.vx) * dt;
+      rn.y += rn.vy * dt;
 
-      if (wind < 0.02 && rn.vy < 1.6*DPR && Math.random() < 0.006*k){
+      if (wind < 0.02 && rn.vy < 1.6*DPR && Math.random() < 0.006*dt){
         rn.stall = 20 + Math.random()*70;
         rn.vy *= 0.3;
       }
@@ -1245,8 +1250,15 @@
     /* How many 30fps steps this frame covers. Every physics increment below
        is scaled by it, so a dropped frame advances the simulation by the
        right amount instead of simply losing that motion. Clamped so a long
-       stall (tab hidden, GC pause) cannot teleport everything at once. */
-    var k = Math.max(0.2, Math.min(3, delta / (1000/30)));
+       stall (tab hidden, GC pause) cannot teleport everything at once.
+
+       Named `dt` and never `k`: `k` was already a loop counter further down
+       this same function, and since `var` is function-scoped rather than
+       block-scoped the trail loop silently overwrote this value with its own
+       index — zero whenever nothing was moving. Every physics increment then
+       multiplied by zero, which froze the runners outright and turned the
+       launch into a plain fade. One shadowed name, both symptoms. */
+    var dt = Math.max(0.2, Math.min(3, delta / (1000/30)));
 
     ctx.clearRect(0,0,W,H);
 
@@ -1270,34 +1282,37 @@
 
     /* lens beads — water sitting on the glass */
     if (wet > 0.001){
-      /* The mist stays baked even through the blow-off: instead of dropping
-         the cache and simulating ~1,350 motes individually at exactly the
-         moment the renderer is busiest, the whole layer is translated under
-         the wind and faded. Motes are one to five pixels and near-identical
-         in mass, so they are indistinguishable from individually simulated
-         ones — and this is what keeps the launch from stuttering. */
-      if (!mistOK) bakeMist();
-      if (wind > 0){
-        var mArea = 0.16;                       /* representative mist mass */
-        mistDX += wind * DPR * mArea * (0.95*gust + 0.20*chase) * k * 3.2;
-        mistDY += (0.02*DPR + wind * DPR * mArea * (0.55*chase - 0.45*gust)) * k * 3.2;
+      /* While the lens is undisturbed the fine mist — the large majority of
+         the field by count — is baked once and blitted, which costs nothing
+         because none of it is moving. The moment airflow starts the cache is
+         abandoned and every mote is simulated on its own.
+
+         Sliding the baked layer as a unit was tried instead and rejected: it
+         is far cheaper, but every mote then shares one motion, so the launch
+         reads as a sheet drifting rather than as water being stripped off the
+         glass. Individual simulation is the whole point of that moment, and
+         the field is sized so it can be afforded. */
+      var useBake = !blowing;
+      if (useBake){
+        if (!mistOK) bakeMist();
+        ctx.globalAlpha = wet;
+        ctx.drawImage(mistCv, 0, 0);
+        ctx.globalAlpha = 1;
       }
-      ctx.globalAlpha = wet;
-      ctx.drawImage(mistCv, mistDX, mistDY);
-      ctx.globalAlpha = 1;
 
       for (var j=0;j<beads.length;j++){
         var b = beads[j];
-        if (b.mist) continue;                 /* lives in the baked layer */
+        if (useBake && b.mist) continue;      /* already in the baked layer */
+        if (b.x < -9000) continue;
         var running = !(b.hold > 0 && wind < 0.02);
 
         /* --- wet streak: a fading chain of shrinking stamps left where
            the drop has already passed, not a solid rectangle. Each stamp
            is a soft small blob, so the streak looks like clinging water
            rather than a drawn line. Aged out from the tail forward. */
-        for (var k=0;k<b.trailPts.length;k++){
-          var tp = b.trailPts[k];
-          tp.age += k;
+        for (var tI=0;tI<b.trailPts.length;tI++){
+          var tp = b.trailPts[tI];
+          tp.age += dt;
           var life = 1 - tp.age / tp.life;
           if (life <= 0) continue;
           ctx.globalAlpha = b.a * wet * life * .5;
@@ -1314,9 +1329,9 @@
 
         if (!running){
           /* idling: surface tension holds it, with a faint wobble */
-          b.hold -= k;
-          b.wob += 0.03 * k;
-          b.x += Math.sin(b.wob) * 0.05 * DPR * k;
+          b.hold -= dt;
+          b.wob += 0.03 * dt;
+          b.x += Math.sin(b.wob) * 0.05 * DPR * dt;
         } else {
           /* Released, or torn loose by airflow. Direction here isn't
              arbitrary — it's keyed to what actually happens on screen in
@@ -1337,10 +1352,10 @@
              Larger beads catch more air either way, so they leave first
              and fastest. */
           var area = b.r / (10*DPR);
-          b.vy += (b.grav + wind * DPR * area * (0.55*chase - 0.45*gust)) * k;
-          b.vx += wind * DPR * area * (0.95*gust + 0.20*chase) * k;
-          b.x += b.vx * k;
-          b.y += b.vy * k;
+          b.vy += (b.grav + wind * DPR * area * (0.55*chase - 0.45*gust)) * dt;
+          b.vx += wind * DPR * area * (0.95*gust + 0.20*chase) * dt;
+          b.x += b.vx * dt;
+          b.y += b.vy * dt;
 
           if (Math.sqrt(b.vx*b.vx + b.vy*b.vy) > 0.25*DPR){
             b.trailPts.push({x:b.x, y:b.y, r:b.r*0.6, age:0, life:14});
@@ -1357,7 +1372,7 @@
       }
 
       /* running drops, on top of the resting field */
-      stepRunners(k, wind, gust, chase);
+      stepRunners(dt, wind, gust, chase);
       for (var q=0;q<runners.length;q++){
         if (runners[q].x < -9000) continue;
         drawRunner(runners[q], wet);
