@@ -256,18 +256,61 @@ stat placement. No livery, so nothing competes with the stat captions.
 
 ## Delivery formats
 
-Every act ships as **VP9 WebM first, H.264 MP4 as fallback**. Chrome, Firefox
-and Edge take the WebM; Safari and iOS fall through to the MP4.
+Every act ships as **AV1 in WebM first, H.264 MP4 as fallback**. Chrome, Edge,
+Firefox and Safari 17+ take the WebM; anything older falls through to the MP4.
 
-| Act | MP4 | WebM | saved |
+The WebM was VP9 until a measured comparison replaced it. All variants were
+scored by SSIM against the committed MP4, which is the crispest copy available
+(the 20 MB generator original was never kept):
+
+| Encode | Size | vs VP9 | SSIM |
 |---|---|---|---|
-| 1 — loop | 6.1 MB | 3.9 MB | 36% |
-| 2 — launch | 6.1 MB | 3.4 MB | 44% |
-| 3 — drive | 8.7 MB | 7.4 MB | 15% |
+| VP9, as originally shipped | 3.93 MB | — | 0.9445 |
+| VP9 two-pass, tuned | 3.13 MB | −20% | 0.9463 |
+| AV1, crf 32 | 2.98 MB | −24% | 0.9471 |
+| AV1, crf 36 | 2.33 MB | −41% | 0.9457 |
+| **AV1 crf 32 + unsharp** | **3.17 MB** | **−19%** | **0.9464** |
+
+**Re-encoding buys size, not sharpness.** Every unsharpened variant lands
+between 0.944 and 0.947 — far too narrow to see. The only thing that raises
+apparent detail is a mild `unsharp=5:5:0.55:5:5:0.0` pass before encoding, and
+because AV1 comes in so far under the VP9 budget, the saving pays for it and
+still lands smaller. Sharpening costs fidelity against the same encode
+(0.9471 → 0.9464) because it deliberately deviates from the source; it still
+beats the VP9 it replaces.
+
+Shipped result — every clip is both smaller and closer to the MP4:
+
+| Act | old WebM | new WebM | saved | old SSIM | new SSIM |
+|---|---|---|---|---|---|
+| 1 — loop | 3.93 MB | 3.17 MB | 19% | 0.9445 | 0.9464 |
+| 2 — launch | 3.45 MB | 2.74 MB | 21% | 0.9425 | 0.9432 |
+| 3 — drive | 7.41 MB | 7.12 MB | 4% | 0.9532 | 0.9533 |
 
 Act 3 saves least because its GOP-6 scrub encode forces frequent keyframes,
-which limits how much inter-frame compression either codec can do. That is the
-cost of smooth scrubbing and it is worth paying.
+which limits how much inter-frame compression any codec can do. That is the
+cost of smooth scrubbing and it is worth paying. GOP 6 survives the AV1 encode
+intact — 12 keyframes in 3 s at 24 fps, same as the VP9 — and seeks measure a
+44.5 ms median, 109 ms worst case.
+
+**Upscaling was considered and rejected.** At native 1:1 the source carries very
+little fine detail: between the shallow depth of field the treatment asked for
+and the softness the generator produced, most of the frame is already blur.
+Encoding at 1440p or 4K would multiply file size to store an interpolation of
+that blur. Genuine added detail would need AI super-resolution, which costs
+generation credits.
+
+**The `type` attribute is load-bearing.** Sources are declared
+`type='video/webm; codecs="av01.0.08M.08"'`. A plain `video/webm` returns
+"maybe" from `canPlayType` on a browser with WebM but no AV1 decoder, so it
+would accept the source and then fail rather than falling through to the MP4.
+With the codec spelled out it returns empty and the fallback works. Verified:
+the string reports "probably" and decodes at 1920×1080.
+
+**Sharpening does not disturb the Act 3 scrub.** The concern was that raising
+high-frequency detail would make frame-to-frame noise more visible while
+scrubbing. Measured as mean luma of the frame difference: 11.101 for the old
+VP9, 11.152 for AV1 + sharpen — a 0.5% difference, which settled it.
 
 ## Testing notes
 

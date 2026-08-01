@@ -249,19 +249,27 @@
 <body class="locked">
 
 <div class="stage" id="stage">
-  <!-- WebM first: VP9 is markedly smaller at equal quality and is what
-       Chrome, Firefox and Edge will take. Safari and iOS fall through to
-       the H.264 MP4. -->
+  <!-- WebM first, now carrying AV1 rather than VP9: it measures higher
+       fidelity than the VP9 encode it replaces while being ~19% smaller,
+       which bought enough headroom to also run a mild sharpen pass. Chrome,
+       Edge, Firefox and Safari 17+ take it; anything older falls through to
+       the H.264 MP4.
+
+       The explicit codec string is load-bearing, not decoration. A plain
+       `video/webm` returns "maybe" from canPlayType on a browser that has
+       WebM but no AV1 decoder, so it would accept the source and then fail
+       to decode rather than falling through to the MP4. With the codec
+       spelled out it returns empty and the fallback works. -->
   <video id="vLoop" muted loop playsinline preload="auto" poster="assets/hero-frame.png">
-    <source src="assets/hero-loop.webm" type="video/webm">
+    <source src="assets/hero-loop.webm" type='video/webm; codecs="av01.0.08M.08"'>
     <source src="assets/hero-loop.mp4"  type="video/mp4">
   </video>
   <video id="vLaunch" muted playsinline preload="auto">
-    <source src="assets/act2-launch.webm" type="video/webm">
+    <source src="assets/act2-launch.webm" type='video/webm; codecs="av01.0.08M.08"'>
     <source src="assets/act2-launch.mp4"  type="video/mp4">
   </video>
   <video id="vDrive" muted playsinline preload="auto">
-    <source src="assets/act3-drive.webm" type="video/webm">
+    <source src="assets/act3-drive.webm" type='video/webm; codecs="av01.0.08M.08"'>
     <source src="assets/act3-drive.mp4"  type="video/mp4">
   </video>
 </div>
