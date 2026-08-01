@@ -61,14 +61,26 @@
   /* ---------- overlay: the connective tissue ---------- */
   /* One layer above all three acts. Because it never changes across act
      boundaries, it does the work of hiding that they are separate files. */
+  /* Water composites NORMALLY, not screen. A screen-blended layer can only
+     ever add light, which makes the dark meniscus rim that identifies every
+     real droplet impossible to draw — the drop can never be darker than what
+     is behind it, so it reads as a sticker. Drops now paint their own
+     darkness, which means they must be allowed to darken. */
   #fx{
     position:fixed; inset:0;
     z-index:5; pointer-events:none;
+  }
+  /* Grain keeps its own layer precisely because it still wants screen: it is
+     additive luminance noise, and on the water layer it would wash the frame
+     toward grey instead of sparkling. */
+  #fxg{
+    position:fixed; inset:0;
+    z-index:6; pointer-events:none;
     mix-blend-mode:screen;
     opacity:.85;
   }
   .vignette{
-    position:fixed; inset:0; z-index:6; pointer-events:none;
+    position:fixed; inset:0; z-index:7; pointer-events:none;
     background:
       radial-gradient(120% 85% at 50% 45%,transparent 42%,rgba(0,0,0,.55) 100%),
       linear-gradient(to bottom,rgba(0,0,0,.35),transparent 22%,transparent 78%,rgba(0,0,0,.45));
@@ -255,6 +267,7 @@
 </div>
 
 <canvas id="fx"></canvas>
+<canvas id="fxg"></canvas>
 <div class="vignette"></div>
 <div id="veil"></div>
 
@@ -609,20 +622,84 @@
      rain thins out whenever a shot faces a lit street. Here the density
      is constant regardless of what any individual clip is doing.
 
-     Droplets are real optics, not colored circles: each one clips a
-     magnified, slightly offset sample of the actual frame behind it and
-     draws that inside its own outline, so the neon and sodium practicals
-     genuinely bend through the water the way they do on a real lens.
-     Combined with mix-blend-mode:screen on the whole canvas, dark video
-     stays invisible and only the light — streetlights, wet-road glints —
-     blooms inside each drop, which is exactly the right failure mode:
-     water lenses light, it doesn't paint shadow.
+     Droplets are real optics. A drop on glass is a strong positive lens with
+     a very short focal length: it gathers a WIDE slice of the scene and
+     forms a real, INVERTED, minified image of it. So each bead clips a patch
+     of the live frame several times its own footprint, flips it, and paints
+     that inside its outline — which is why streetlights appear in the wrong
+     half of a bead, and why they read as glass rather than as decals.
+
+     The edge then goes dark. At a drop's rim the water surface is nearly
+     edge-on to the camera, so light from behind is refracted away or totally
+     internally reflected and almost none reaches the sensor. That dark
+     meniscus is the single feature that identifies water in every reference
+     photograph, and it is the reason this layer cannot be screen-blended.
      ============================================================ */
   var fx = document.getElementById('fx');
   var ctx = fx.getContext('2d', {alpha:true});
+  var fxg = document.getElementById('fxg');
+  var gctx2 = fxg.getContext('2d', {alpha:true});
   var W = 0, H = 0, DPR = 1;
-  var beads = [];
+  var beads = [], runners = [];
   var cov = null;   /* object-fit:cover source rect on vLoop, cached */
+
+  /* Field density. Tuned by eye against the Act 1 plate — full strength put
+     too much water in front of the car, which is the subject. */
+  var DENSITY = 0.80;
+
+  /* ---- per-frame source texture ----
+     Every drop samples the frame behind it, and sampling a <video> element
+     directly re-uploads its texture on each call — with hundreds of drops
+     that alone put the loop at ~7fps. Instead the cover-cropped frame is
+     blitted ONCE per frame into a small canvas, and every drop samples that.
+     Reduced resolution costs nothing visible here because a drop minifies
+     what it gathers by SPREAD anyway. */
+  var srcCv = document.createElement('canvas');
+  var srcCtx = srcCv.getContext('2d', {alpha:false});
+  var SW = 0, SH = 0, srcOK = false;
+
+  function sizeSrc(){
+    SW = srcCv.width  = 640;
+    SH = srcCv.height = Math.max(1, Math.round(640 * (H||1) / (W||1)));
+  }
+
+  /* Water only exists in Act 1 and through the launch ramp, so the source is
+     the hero loop until the launch clip takes over. Sampling whatever is
+     actually on screen keeps the refraction honest across the handoff. */
+  function currentVideo(){
+    if (blowing && vLaunch && vLaunch.readyState >= 2 && !vLaunch.paused) return vLaunch;
+    return vLoop;
+  }
+
+  function refreshSrc(vid){
+    srcOK = false;
+    if (!cov || !vid || vid.readyState < 2) return;
+    if (!SW || !SH) sizeSrc();
+    try {
+      srcCtx.drawImage(vid, cov.sx, cov.sy, cov.sw, cov.sh, 0, 0, SW, SH);
+      srcOK = true;
+    } catch(e){ /* not decodable yet this frame — skip, not fatal */ }
+  }
+
+  /* ---- baked rim sprite ----
+     The meniscus gradient is identical for every drop apart from scale, so
+     it is baked once and blitted rather than rebuilt per drop per frame.
+     createRadialGradient several hundred times a frame was the other half of
+     the cost. Only the largest drops still get a path-fitted gradient, where
+     the irregular outline is actually visible. */
+  var rimCv = document.createElement('canvas');
+  var RIMS = 64;
+  rimCv.width = rimCv.height = RIMS;
+  (function bakeRim(){
+    var c = rimCv.getContext('2d');
+    var g = c.createRadialGradient(RIMS/2, RIMS/2, RIMS*0.15, RIMS/2, RIMS/2, RIMS*0.5);
+    g.addColorStop(0,   'rgba(3,8,11,0)');
+    g.addColorStop(0.62,'rgba(3,8,11,.12)');
+    g.addColorStop(0.86,'rgba(2,7,10,.52)');
+    g.addColorStop(1,   'rgba(1,5,7,.88)');
+    c.fillStyle = g;
+    c.beginPath(); c.arc(RIMS/2, RIMS/2, RIMS/2, 0, 6.2832); c.fill();
+  })();
 
   /* Water is an Act 1 state. `blowing` starts the moment the car launches
      and never resets — once the lens is clear, it stays clear. */
@@ -652,11 +729,12 @@
 
   function sizeFx(){
     DPR = Math.min(window.devicePixelRatio || 1, 2);
-    W = fx.width  = Math.floor(innerWidth  * DPR);
-    H = fx.height = Math.floor(innerHeight * DPR);
-    fx.style.width = innerWidth + 'px';
-    fx.style.height = innerHeight + 'px';
+    W = fx.width  = fxg.width  = Math.floor(innerWidth  * DPR);
+    H = fx.height = fxg.height = Math.floor(innerHeight * DPR);
+    fx.style.width  = fxg.style.width  = innerWidth + 'px';
+    fx.style.height = fxg.style.height = innerHeight + 'px';
     sizeCover();
+    sizeSrc();
     seed();
   }
 
@@ -664,46 +742,145 @@
      footage already carries its own rain, and a second set of synthetic
      vertical lines over the top read as an effect rather than as weather.
      Beads stay because they are the one thing the generation never gave
-     us — water sitting on a physical lens. */
+     us — water sitting on a physical lens.
+
+     Population spans three bands rather than one flat range. The mist band is
+     the majority and is what actually reads as a wet surface: sparse large
+     drops on their own always look applied rather than landed. Placement is
+     clustered around a few centres, because water lands in drifts and a
+     uniform scatter reads as noise. */
   function seed(){
-    var area = (innerWidth * innerHeight) / 1000;
-    beads = [];
-    var b = Math.min(150, Math.max(52, Math.round(area * 0.17)));
-    for (var j=0;j<b;j++) beads.push(newBead(false));
+    var areaK = (innerWidth * innerHeight) / 1000;
+    beads = []; runners = [];
+
+    var nodes = [], q;
+    for (q=0;q<7;q++){
+      nodes.push({ x:Math.random()*W, y:Math.random()*H,
+                   s:(0.18 + Math.random()*0.4) * Math.min(W,H) });
+    }
+    function place(){
+      if (Math.random() < 0.34) return {x:Math.random()*W, y:Math.random()*H};
+      var nd = nodes[Math.floor(Math.random()*nodes.length)];
+      var ang = Math.random()*6.2832;
+      var dist = Math.pow(Math.random(),1.7)*nd.s;
+      return {x:nd.x + Math.cos(ang)*dist, y:nd.y + Math.sin(ang)*dist};
+    }
+
+    var nMist = Math.round(areaK*1.30*DENSITY);
+    var nMid  = Math.round(areaK*0.30*DENSITY);
+    var nFat  = Math.round(areaK*0.055*DENSITY);
+    var k;
+    for (k=0;k<nMist;k++) beads.push(newBead(place(), 0.5, 2.6, 1.5));
+    for (k=0;k<nMid; k++) beads.push(newBead(place(), 2.6, 8.5, 1.35));
+    for (k=0;k<nFat; k++) beads.push(newBead(place(), 8.5, 20,  2.2));
+
+    var nRun = Math.max(2, Math.round(innerWidth/210 * DENSITY));
+    for (k=0;k<nRun;k++) runners.push(newRunner(true));
+
+    mistOK = false;
   }
 
-  /* Beads sit ON the lens. Size is drawn from a weighted distribution
-     rather than a flat range: mostly fine mist, a few mid drops, the
-     occasional fat one. Real glass in rain looks like that, and a flat
-     range reads as noise. Bigger drops are heavier, so they hold on
-     less and run faster once they go.
+  /* The mist band is ~80% of the field by count and, while the lens is still
+     wet and undisturbed, it does not move — the idle wobble is 0.05px. Baking
+     it once and blitting turns roughly 2,700 path fills per frame into a
+     single drawImage. Once airflow starts they scatter, so from then on they
+     are drawn live and the bake is abandoned. */
+  var mistCv = document.createElement('canvas');
+  var mistCtx = mistCv.getContext('2d', {alpha:true});
+  var mistOK = false;
 
-     Each bead also gets a fixed, random outline — a ring of radius
-     multipliers baked once at creation — so idle drops read as small
-     irregular blobs instead of perfect circles. Baking it once (rather
-     than jittering every frame) keeps the outline from shimmering; real
-     surface tension holds a stable, if lumpy, shape. */
-  function newBead(atTop){
-    var roll = Math.random(), r;
-    if (roll < .58)      r = 3 + Math.random()*5;    /* fine mist   */
-    else if (roll < .87) r = 8 + Math.random()*9;    /* mid drops   */
-    else                 r = 17 + Math.random()*15;  /* fat drops   */
-    r *= DPR;
-    var heavy = r / (32*DPR);                        /* 0..1 mass    */
-    var pts = 6 + Math.floor(Math.random()*3);       /* 6-8 lobes    */
-    var shape = [];
-    for (var i=0;i<pts;i++) shape.push(0.82 + Math.random()*0.34);
+  function bakeMist(){
+    if (!W || !H) return;
+    mistCv.width = W; mistCv.height = H;
+    mistCtx.clearRect(0,0,W,H);
+    var save = ctx;
+    ctx = mistCtx;                       /* drawDropBody paints to `ctx` */
+    try {
+      for (var i=0;i<beads.length;i++){
+        var b = beads[i];
+        if (b.mist && b.x > -9000) drawDropBody(b, b.x, b.y, 1);
+      }
+    } finally {
+      /* Restore unconditionally: if this threw halfway, every later frame
+         would otherwise keep painting into the offscreen and the overlay
+         would silently vanish. */
+      ctx = save;
+    }
+    mistCtx.globalAlpha = 1;
+    mistOK = true;
+  }
+
+  /* Beads sit ON the lens. Bigger drops are heavier, so they hold on less and
+     run faster once they go.
+
+     Each bead gets a fixed, random outline — a ring of radius multipliers
+     baked once at creation — so idle drops read as irregular blobs instead of
+     perfect circles. Baking it once (rather than jittering every frame) keeps
+     the outline from shimmering; real surface tension holds a stable, if
+     lumpy, shape. The multipliers are correlated with their neighbours so the
+     result is a lumpy blob rather than an evenly scalloped cog. */
+  function newBead(pos, rMin, rMax, curve){
+    var r = (rMin + Math.pow(Math.random(),curve)*(rMax-rMin)) * DPR;
+    var heavy = Math.min(1, r/(30*DPR));             /* 0..1 mass */
+    var n = 7 + Math.floor(Math.random()*4), shape = [];
+    var prev = 0.86 + Math.random()*0.28;
+    for (var i=0;i<n;i++){
+      prev = prev*0.55 + (0.74 + Math.random()*0.5)*0.45;
+      shape.push(prev);
+    }
+    /* Coalescence: a satellite lobe fused to the parent, which is what two
+       drops that touched actually look like afterwards. */
+    var sat = null;
+    if (r > 7*DPR && Math.random() < 0.30){
+      var sa = Math.random()*6.2832;
+      sat = { dx:Math.cos(sa)*r*0.78, dy:Math.sin(sa)*r*0.78,
+              r: r*(0.42 + Math.random()*0.36) };
+    }
     return {
-      x: Math.random()*W,
-      y: atTop ? Math.random()*H*0.4 : Math.random()*H,
-      r: r,
-      a: 0.16 + Math.random()*0.18 + heavy*0.18,
+      x: pos.x, y: pos.y, r: r,
+      mist: r < 4*DPR,          /* baked while idle — see bakeMist */
+      a: 0.62 + Math.random()*0.38,
+      /* Per-drop highlight strength. Uniformly bright glints on every bead is
+         what makes a field read as soap bubbles — real ones have a few
+         catching the light hard and most catching it weakly. */
+      gs: 0.20 + Math.pow(Math.random(),2.1)*0.95,
+      glintAng: -2.30 + (Math.random()-0.5)*0.9,     /* light sits upper-left */
+      sat: sat,
+      sag: heavy*0.30,                               /* gravity flattens mass */
       vx: 0, vy: 0,
       grav: (0.02 + heavy*0.10) * DPR,               /* heavier runs sooner */
       hold: (1 - heavy) * (120 + Math.random()*680), /* light ones cling    */
       wob: Math.random()*6.28,
       shape: shape,
       trailPts: []                                   /* recent positions, for the wet streak */
+    };
+  }
+
+  /* A running drop: a bead that has broken loose, towing the wet track it is
+     cutting. Head and tail are one body of water and share one code path —
+     drawn separately they read as two effects bolted together. */
+  function newRunner(anywhere){
+    var r = (7 + Math.pow(Math.random(),1.4)*13) * DPR;
+    var n = 7 + Math.floor(Math.random()*4), shape = [];
+    var prev = 0.86 + Math.random()*0.28;
+    for (var i=0;i<n;i++){
+      prev = prev*0.55 + (0.74 + Math.random()*0.5)*0.45;
+      shape.push(prev);
+    }
+    return {
+      x: Math.random()*W,
+      y: anywhere ? Math.random()*H : -30*DPR,
+      r: r, shape: shape, sat: null, sag: 0.30,
+      a: 0.72 + Math.random()*0.28,
+      gs: 0.3 + Math.pow(Math.random(),1.8)*0.85,
+      glintAng: -2.30 + (Math.random()-0.5)*0.9,
+      vy: (0.6 + Math.random()*1.5)*DPR, vx: 0, drift: 0,
+      /* Stall and release. Water pins on a speck, builds up behind it, then
+         breaks free and accelerates. It is the most recognisable thing about
+         a drop running down glass, and constant velocity kills it instantly. */
+      stall: Math.random() < 0.5 ? (30 + Math.random()*90) : 0,
+      tail: [], grav: 0.02*DPR, hold: 0,
+      wob: Math.random()*6.2832, trailPts: []
     };
   }
 
@@ -731,41 +908,294 @@
     ctx.closePath();
   }
 
-  /* A running drop's body: a rounded head with a point trailing back
-     along its direction of travel, drawn in the drop's own local frame
-     (+y = forward) then rotated to match velocity. This is what a real
-     droplet running down glass looks like — not a circle towing a
-     rectangle, a single continuous shape that narrows toward the tail. */
-  function teardropPath(cx, cy, r, angle, len){
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.rotate(angle + Math.PI/2);
-    ctx.beginPath();
-    ctx.moveTo(0, r*0.92);
-    ctx.bezierCurveTo(r*1.05, r*0.68,  r*0.95, -len*0.32, 0, -len);
-    ctx.bezierCurveTo(-r*0.95, -len*0.32, -r*1.05, r*0.68, 0, r*0.92);
-    ctx.closePath();
-    ctx.restore();
+  /* Outline of a bead, including its fused satellite lobe if it has one. */
+  function dropPath(d, cx, cy){
+    blobPath(cx, cy, d.r, d.shape, d.sag);
+    if (d.sat){
+      ctx.moveTo(cx + d.sat.dx + d.sat.r, cy + d.sat.dy);
+      ctx.arc(cx + d.sat.dx, cy + d.sat.dy, d.sat.r, 0, 6.2832);
+    }
   }
 
-  /* Clips to whatever path is already current on `ctx` and paints a
-     magnified, slightly offset sample of the live frame inside it — the
-     actual refraction. Skipped for the smallest mist motes: at that size
-     it's imperceptible and it's the single most expensive draw call per
-     bead, so this is where the frame budget goes. */
-  function refract(cx, cy, r, ox, oy){
-    if (!cov || r < 6*DPR) return;
+  /* SPREAD > 1 is the minification: the drop gathers a slice of the scene
+     several times its own footprint and squeezes it in. Combined with the
+     180-degree rotation, that is the whole of a droplet's optics. */
+  var SPREAD = 4.2;
+
+  /* Clips to whatever path is current on `ctx` and paints the inverted,
+     minified sample of the live frame inside it. Skipped for the smallest
+     mist motes: at that size it's imperceptible and it is the single most
+     expensive call per bead, so this is where the frame budget goes. */
+  function refract(d, cx, cy){
+    if (!srcOK) return false;
+    var size = (d.r*2) * (SW/W) * SPREAD;
+    var vx = (cx/W) * SW;
+    var vy = (cy/H) * SH;
+    var R = d.r*1.05;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(Math.PI);
+    ctx.translate(-cx, -cy);
+    ctx.globalAlpha = 1;
+    try {
+      ctx.drawImage(srcCv, vx-size/2, vy-size/2, size, size, cx-R, cy-R, R*2, R*2);
+    } catch(e){ /* not decodable yet this frame — skip, not fatal */ }
+    ctx.restore();
+    return true;
+  }
+
+  /* ---- channels: a runner's tail ----
+     A vertical channel of water is optically a CYLINDRICAL lens. It bends
+     light in the horizontal plane only, so the scene inside is flipped
+     left-to-right and squeezed sideways while vertically it passes through
+     almost untouched. A bead inverts both axes; a channel inverts one. */
+  function channelAt(pts, y){
+    if (pts.length < 2) return null;
+    if (y < pts[0].y || y > pts[pts.length-1].y) return null;
+    for (var i=1;i<pts.length;i++){
+      if (y <= pts[i].y){
+        var p0 = pts[i-1], p1 = pts[i];
+        var t = (y - p0.y) / Math.max(0.0001, (p1.y - p0.y));
+        t = t*t*(3-2*t);
+        return { cx: p0.x + (p1.x-p0.x)*t, hw: (p0.w + (p1.w-p0.w)*t)*0.5 };
+      }
+    }
+    return null;
+  }
+
+  function channelOutline(pts){
+    var i, a;
+    ctx.beginPath();
+    for (i=0;i<pts.length;i++){
+      a = channelAt(pts, pts[i].y) || {cx:pts[i].x, hw:pts[i].w/2};
+      if (i===0) ctx.moveTo(a.cx - a.hw, pts[i].y);
+      else       ctx.lineTo(a.cx - a.hw, pts[i].y);
+    }
+    for (i=pts.length-1;i>=0;i--){
+      a = channelAt(pts, pts[i].y) || {cx:pts[i].x, hw:pts[i].w/2};
+      ctx.lineTo(a.cx + a.hw, pts[i].y);
+    }
+    ctx.closePath();
+  }
+
+  function drawChannel(pts, wet, alpha){
+    if (!pts || pts.length < 2) return;
+    var y0 = pts[0].y, y1 = pts[pts.length-1].y;
+
+    ctx.save();
+    channelOutline(pts);
+    ctx.clip();
+    if (srcOK){
+      var band = 9*DPR;
+      for (var y=y0; y<y1; y+=band){
+        var a = channelAt(pts, y);
+        if (!a || a.hw <= 0) continue;
+        var sw2 = (a.hw*2)*(SW/W)*2.4;
+        var sh2 = band*(SH/H);
+        var vx = (a.cx/W)*SW;
+        var vy = (y/H)*SH;
+        ctx.save();
+        ctx.globalAlpha = alpha*wet;
+        ctx.translate(a.cx, 0); ctx.scale(-1, 1); ctx.translate(-a.cx, 0);
+        try{
+          ctx.drawImage(srcCv, vx-sw2/2, vy-sh2/2, sw2, sh2,
+                        a.cx-a.hw, y-band*0.5, a.hw*2, band*1.6);
+        }catch(e){}
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+
+    channelOutline(pts);
+    ctx.globalAlpha = alpha*wet*0.85;
+    ctx.lineWidth = 1.3*DPR;
+    ctx.strokeStyle = 'rgba(2,7,10,.52)';
+    ctx.stroke();
+
+    /* Broken highlight. An unbroken bright line the full length of a channel
+       reads as a glass rod — real water catches the light only where the
+       surface happens to be angled right. */
+    ctx.globalAlpha = alpha*wet*0.42;
+    ctx.lineWidth = 1.1*DPR;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(236,250,255,.7)';
+    var run = null;
+    for (var k=0;k<pts.length;k++){
+      var s = channelAt(pts, pts[k].y);
+      var lit = s && s.hw > 1.6*DPR && ((k*2654435761 % 101)/101) < 0.62;
+      if (lit){
+        var sx = s.cx - s.hw*0.44;
+        if (!run){ ctx.beginPath(); ctx.moveTo(sx, pts[k].y); run = true; }
+        else ctx.lineTo(sx, pts[k].y);
+      } else if (run){ ctx.stroke(); run = null; }
+    }
+    if (run) ctx.stroke();
+    ctx.lineCap = 'butt';
+    ctx.globalAlpha = 1;
+  }
+
+  /* One bead, fully rendered: refracted scene, meniscus, caustic, glint.
+     Runners share this exact routine for their heads. */
+  function drawDropBody(d, cx, cy, wet){
+    var R = d.r;
+    ctx.globalAlpha = d.a * wet;
+
+    /* Tier 0 — mist. These are the overwhelming majority by count, and at a
+       few pixels across none of the optics below is resolvable. Giving them
+       a path, a clip and a gradient anyway is what made this unshippable, so
+       they get a dot and a highlight and nothing else. */
+    if (R < 4*DPR){
+      ctx.globalAlpha = d.a * wet * 0.62;
+      ctx.fillStyle = 'rgba(150,183,206,.55)';
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.2832); ctx.fill();
+      ctx.globalAlpha = d.a * wet * 0.8 * d.gs;
+      ctx.fillStyle = 'rgba(255,255,255,.7)';
+      ctx.beginPath();
+      ctx.arc(cx - R*0.24, cy - R*0.26, Math.max(0.4, R*0.38), 0, 6.2832);
+      ctx.fill();
+      return;
+    }
+
+    var big = R >= 18*DPR;
+
+    /* 1 — the refracted scene, clipped to the drop. The lumpy outline is only
+       built where it can be seen: on large drops, and on any drop carrying a
+       fused satellite lobe. Everything else clips to a plain arc, which skips
+       eight quadratic curves per drop per frame and looks identical at these
+       sizes — the rim below is already the circular sprite. */
+    if (big || d.sat) dropPath(d, cx, cy);
+    else { ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.2832); }
     ctx.save();
     ctx.clip();
-    var mag = 1.85;
-    var vx = cov.sx + ((cx+ox)/W) * cov.sw;
-    var vy = cov.sy + ((cy+oy)/H) * cov.sh;
-    var size = (r*2) * (cov.sw/W) / mag;
-    ctx.globalAlpha = Math.min(1, ctx.globalAlpha * 1.9);
-    try {
-      ctx.drawImage(vLoop, vx-size/2, vy-size/2, size, size, cx-r, cy-r, r*2, r*2);
-    } catch(e){ /* video not decodable yet this frame — skip, not fatal */ }
+    if (!refract(d, cx, cy)){
+      ctx.globalAlpha = d.a * wet * 0.5;
+      ctx.fillStyle = 'rgba(206,229,244,.5)';
+      ctx.fill();
+    }
     ctx.restore();
+
+    /* 2 — the meniscus. Light at the rim is refracted away from the camera
+       entirely, so the edge goes dark. This is the feature a screen-blended
+       layer could not produce at any setting.
+
+       Only the largest drops get a gradient fitted to their actual outline;
+       below that the baked circular sprite is indistinguishable and costs one
+       blit instead of building a gradient object every frame. */
+    ctx.globalAlpha = Math.min(1, d.a * wet);
+    if (big){
+      dropPath(d, cx, cy);
+      var rg = ctx.createRadialGradient(cx, cy, R*0.30, cx, cy, R*1.06);
+      rg.addColorStop(0,   'rgba(3,8,11,0)');
+      rg.addColorStop(0.62,'rgba(3,8,11,.12)');
+      rg.addColorStop(0.86,'rgba(2,7,10,.52)');
+      rg.addColorStop(1,   'rgba(1,5,7,.88)');
+      ctx.fillStyle = rg;
+      ctx.fill();
+      ctx.lineWidth = Math.max(0.8, R*0.055);
+      ctx.strokeStyle = 'rgba(1,5,8,.5)';
+      ctx.stroke();
+    } else {
+      var S = R*2.12;
+      ctx.drawImage(rimCv, cx - S/2, cy - S/2, S, S);
+    }
+
+    /* 3 — caustic: the bright arc opposite the light, where rays converge
+       through the far wall. Deliberately faint and only on large drops — at
+       full strength it closes into a continuous ring, and a rim-lit ring is
+       a soap bubble, not a droplet. */
+    if (big){
+      ctx.globalAlpha = d.a * wet * 0.22 * d.gs;
+      ctx.beginPath();
+      ctx.arc(cx, cy, R*0.84, d.glintAng+Math.PI-0.6, d.glintAng+Math.PI+0.6);
+      ctx.lineWidth = Math.max(1, R*0.09);
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = 'rgba(206,232,252,.4)';
+      ctx.stroke();
+    }
+
+    /* 4 — specular. A curved sliver, because the source is broad and the
+       surface curved. A circle is the giveaway at any size above a few px.
+       The tight hot core is a second stroke, so it is spent only where it
+       can actually be seen. */
+    ctx.globalAlpha = Math.min(1, d.a * wet * 0.85 * d.gs);
+    ctx.beginPath();
+    ctx.arc(cx, cy, R*0.62, d.glintAng-0.5, d.glintAng+0.5);
+    ctx.lineWidth = Math.max(0.8, R*0.125);
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'rgba(255,255,255,.9)';
+    ctx.stroke();
+    if (big){
+      ctx.globalAlpha = Math.min(1, d.a * wet * 0.95 * d.gs);
+      ctx.beginPath();
+      ctx.arc(cx, cy, R*0.62, d.glintAng-0.17, d.glintAng+0.17);
+      ctx.lineWidth = Math.max(0.6, R*0.075);
+      ctx.strokeStyle = '#fff';
+      ctx.stroke();
+    }
+    ctx.lineCap = 'butt';
+  }
+
+  /* A runner: the wet track it is cutting, then its head. The trail is
+     narrower than the drop itself — the drop carries most of the water with
+     it and leaves only a wetted track behind. */
+  function drawRunner(rn, wet){
+    if (rn.tail && rn.tail.length > 1){
+      var pts = [];
+      for (var i=0;i<rn.tail.length;i++){
+        var f = i/(rn.tail.length-1);          /* 0 = oldest, 1 = at the head */
+        pts.push({x:rn.tail[i].x, y:rn.tail[i].y, w:rn.r*2*(0.10 + f*0.52)});
+      }
+      drawChannel(pts, wet, 0.85);
+    }
+    drawDropBody(rn, rn.x, rn.y, wet);
+  }
+
+  /* Runners advance whether or not the lens is being blown clear — they are
+     the one thing on the glass that is always in motion. */
+  function stepRunners(wind, gust, chase){
+    for (var i=0;i<runners.length;i++){
+      var rn = runners[i];
+      if (rn.x < -9000) continue;
+
+      if (rn.stall > 0 && wind < 0.02){
+        rn.stall--;
+        rn.wob += 0.05;
+        rn.x += Math.sin(rn.wob)*0.06*DPR;
+        if (rn.stall === 0) rn.vy = Math.max(rn.vy, 0.5*DPR);
+        continue;
+      }
+
+      rn.vy += 0.035*DPR;
+      if (wind > 0){
+        var area = rn.r/(10*DPR);
+        rn.vy += wind*DPR*area*(0.55*chase - 0.45*gust);
+        rn.vx += wind*DPR*area*(0.95*gust + 0.20*chase);
+      }
+      rn.vy = Math.min(rn.vy, 5.5*DPR);
+
+      rn.drift = rn.drift*0.86 + (Math.random()-0.5)*0.20*DPR;
+      rn.x += rn.drift + rn.vx;
+      rn.y += rn.vy;
+
+      if (wind < 0.02 && rn.vy < 1.6*DPR && Math.random() < 0.006){
+        rn.stall = 20 + Math.random()*70;
+        rn.vy *= 0.3;
+      }
+
+      rn.tail.push({x:rn.x, y:rn.y});
+      var maxTail = Math.round(8 + Math.min(26, rn.vy/DPR*9));
+      while (rn.tail.length > maxTail) rn.tail.shift();
+
+      if (rn.y - rn.r > H || rn.x + rn.r < 0 || rn.x - rn.r > W){
+        if (wind > 0.02){ rn.x = -9999; }
+        else {
+          rn.x = Math.random()*W; rn.y = -20*DPR;
+          rn.vy = (0.6 + Math.random()*1.5)*DPR; rn.vx = 0; rn.drift = 0;
+          rn.tail.length = 0;
+          rn.stall = Math.random() < 0.5 ? (20 + Math.random()*80) : 0;
+        }
+      }
+    }
   }
 
   var grain = document.createElement('canvas');
@@ -806,10 +1236,25 @@
     var wet = 1 - blow;                       /* how much water remains */
     var wind = blow * blow;                   /* force ramps in, not linear */
 
+    /* One video-to-canvas blit per frame feeds every drop's refraction. */
+    if (wet > 0.001) refreshSrc(currentVideo());
+
     /* lens beads — water sitting on the glass */
     if (wet > 0.001){
+      /* While nothing is moving the mist is a single blit. */
+      var mistStatic = !blowing;
+      if (mistStatic){
+        if (!mistOK) bakeMist();
+        ctx.globalAlpha = wet;
+        ctx.drawImage(mistCv, 0, 0);
+        ctx.globalAlpha = 1;
+      } else {
+        mistOK = false;
+      }
+
       for (var j=0;j<beads.length;j++){
         var b = beads[j];
+        if (mistStatic && b.mist) continue;   /* already in the baked layer */
         var running = !(b.hold > 0 && wind < 0.02);
 
         /* --- wet streak: a fading chain of shrinking stamps left where
@@ -831,54 +1276,7 @@
         while (b.trailPts.length && b.trailPts[0].age >= b.trailPts[0].life) b.trailPts.shift();
 
         /* --- the drop body itself --- */
-        ctx.globalAlpha = b.a * wet;
-        if (!running){
-          blobPath(b.x, b.y, b.r, b.shape, 0.06);
-        } else {
-          var ang = Math.atan2(b.vy, b.vx);
-          var speed = Math.sqrt(b.vx*b.vx + b.vy*b.vy);
-          var len = b.r * (1.5 + Math.min(2.2, speed*0.35));
-          teardropPath(b.x, b.y, b.r, ang, len);
-        }
-        var refracted = !!cov && b.r >= 6*DPR;
-        refract(b.x, b.y, b.r, -b.r*.15, -b.r*.15);
-        /* Glass shading. The path is still the one built above — refract()
-           clips and restores without touching the current path. Where a
-           refraction sample was drawn, this stays a thin, mostly-clear
-           veil: the actual bent scene is the point, and a heavy milky fill
-           on top of it just paints back over the thing that makes it read
-           as glass instead of a sticker. Only bare mist motes below the
-           refraction cutoff (too small to carry a sample) fall back to a
-           fuller gradient, since otherwise they'd be near-invisible over
-           anything dark — canvas is screen-blended onto the page, so it
-           can only ever add light here, never darken. */
-        var g = ctx.createRadialGradient(b.x - b.r*.34, b.y - b.r*.34, b.r*.08, b.x, b.y, b.r*1.05);
-        if (refracted){
-          g.addColorStop(0,'rgba(255,255,255,.28)');
-          g.addColorStop(.45,'rgba(214,234,248,.12)');
-          g.addColorStop(.8,'rgba(170,196,218,.16)');
-          g.addColorStop(1,'rgba(110,140,165,0)');
-        } else {
-          g.addColorStop(0,'rgba(255,255,255,.85)');
-          g.addColorStop(.35,'rgba(214,234,248,.42)');
-          g.addColorStop(.78,'rgba(150,182,205,.22)');
-          g.addColorStop(1,'rgba(110,140,165,0)');
-        }
-        ctx.fillStyle = g;
-        ctx.fill();
-        /* specular pin — what actually sells it as water rather than fog */
-        if (b.r > 7*DPR){
-          ctx.globalAlpha = b.a * wet * 1.15;
-          ctx.fillStyle = 'rgba(255,255,255,.9)';
-          ctx.beginPath();
-          ctx.arc(b.x - b.r*.36, b.y - b.r*.38, Math.max(0.7*DPR, b.r*.14), 0, 6.2832);
-          ctx.fill();
-          /* a second, dimmer pin: real drops rarely show just one glint */
-          ctx.globalAlpha = b.a * wet * .5;
-          ctx.beginPath();
-          ctx.arc(b.x + b.r*.22, b.y + b.r*.3, Math.max(0.5*DPR, b.r*.08), 0, 6.2832);
-          ctx.fill();
-        }
+        drawDropBody(b, b.x, b.y, wet);
 
         if (!running){
           /* idling: surface tension holds it, with a faint wobble */
@@ -918,18 +1316,33 @@
           }
 
           var gone = b.y - b.r > H || b.y + b.r < 0 || b.x + b.r < 0;
-          if (gone) beads[j] = wind > 0.02 ? offscreenBead(b) : newBead(false);
+          if (gone){
+            beads[j] = wind > 0.02
+              ? offscreenBead(b)
+              : newBead({x:Math.random()*W, y:Math.random()*H}, 0.5, 20, 1.6);
+          }
         }
       }
-    }
 
-    /* grain */
+      /* running drops, on top of the resting field */
+      stepRunners(wind, Math.max(0, 1 - blow*2.2), Math.min(1, blow*1.35));
+      for (var q=0;q<runners.length;q++){
+        if (runners[q].x < -9000) continue;
+        drawRunner(runners[q], wet);
+      }
+    }
+    ctx.globalAlpha = 1;
+
+    /* Grain lives on its own screen-blended layer — it is additive luminance
+       noise, and on the water layer (which composites normally now) it would
+       wash the frame toward grey instead of sparkling. */
     if (grainFrames.length){
       if (now - gswap > 70){ gi = (gi+1) % grainFrames.length; gswap = now; }
-      ctx.globalAlpha = 1;
-      var gp = ctx.createPattern(grainFrames[gi],'repeat');
-      ctx.fillStyle = gp;
-      ctx.fillRect(0,0,W,H);
+      gctx2.clearRect(0,0,W,H);
+      gctx2.globalAlpha = 1;
+      var gp = gctx2.createPattern(grainFrames[gi],'repeat');
+      gctx2.fillStyle = gp;
+      gctx2.fillRect(0,0,W,H);
     }
     ctx.globalAlpha = 1;
   }
