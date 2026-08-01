@@ -777,7 +777,7 @@
     var nRun = Math.max(2, Math.round(innerWidth/210 * DENSITY));
     for (k=0;k<nRun;k++) runners.push(newRunner(true));
 
-    mistOK = false;
+    mistOK = false; mistDX = 0; mistDY = 0;
   }
 
   /* The mist band is ~80% of the field by count and, while the lens is still
@@ -788,6 +788,8 @@
   var mistCv = document.createElement('canvas');
   var mistCtx = mistCv.getContext('2d', {alpha:true});
   var mistOK = false;
+  /* Accumulated wind displacement of the baked mist layer, in canvas px. */
+  var mistDX = 0, mistDY = 0;
 
   function bakeMist(){
     if (!W || !H) return;
@@ -1152,32 +1154,33 @@
 
   /* Runners advance whether or not the lens is being blown clear — they are
      the one thing on the glass that is always in motion. */
-  function stepRunners(wind, gust, chase){
+  function stepRunners(k, wind, gust, chase){
     for (var i=0;i<runners.length;i++){
       var rn = runners[i];
       if (rn.x < -9000) continue;
 
       if (rn.stall > 0 && wind < 0.02){
-        rn.stall--;
-        rn.wob += 0.05;
-        rn.x += Math.sin(rn.wob)*0.06*DPR;
-        if (rn.stall === 0) rn.vy = Math.max(rn.vy, 0.5*DPR);
+        rn.stall -= k;
+        rn.wob += 0.05 * k;
+        rn.x += Math.sin(rn.wob)*0.06*DPR*k;
+        if (rn.stall <= 0){ rn.stall = 0; rn.vy = Math.max(rn.vy, 0.5*DPR); }
         continue;
       }
 
-      rn.vy += 0.035*DPR;
+      rn.vy += 0.035*DPR*k;
       if (wind > 0){
         var area = rn.r/(10*DPR);
-        rn.vy += wind*DPR*area*(0.55*chase - 0.45*gust);
-        rn.vx += wind*DPR*area*(0.95*gust + 0.20*chase);
+        rn.vy += wind*DPR*area*(0.55*chase - 0.45*gust)*k;
+        rn.vx += wind*DPR*area*(0.95*gust + 0.20*chase)*k;
       }
       rn.vy = Math.min(rn.vy, 5.5*DPR);
 
-      rn.drift = rn.drift*0.86 + (Math.random()-0.5)*0.20*DPR;
-      rn.x += rn.drift + rn.vx;
-      rn.y += rn.vy;
+      /* Friction is exponential, so it decays by k steps rather than once. */
+      rn.drift = rn.drift*Math.pow(0.86, k) + (Math.random()-0.5)*0.20*DPR*k;
+      rn.x += (rn.drift + rn.vx) * k;
+      rn.y += rn.vy * k;
 
-      if (wind < 0.02 && rn.vy < 1.6*DPR && Math.random() < 0.006){
+      if (wind < 0.02 && rn.vy < 1.6*DPR && Math.random() < 0.006*k){
         rn.stall = 20 + Math.random()*70;
         rn.vy *= 0.3;
       }
@@ -1220,41 +1223,64 @@
     }
   }
 
+  /* The launch clear takes this many seconds of wall-clock, whatever the
+     frame rate happens to be doing. */
+  var BLOW_SECONDS = 3;
+
   var last = 0, gswap = 0;
   function drawFx(now){
     requestAnimationFrame(drawFx);
     if (now - last < 1000/30) return;   /* 30fps is plenty and halves cost */
+    var delta = last ? now - last : 1000/30;
     last = now;
+
+    /* How many 30fps steps this frame covers. Every physics increment below
+       is scaled by it, so a dropped frame advances the simulation by the
+       right amount instead of simply losing that motion. Clamped so a long
+       stall (tab hidden, GC pause) cannot teleport everything at once. */
+    var k = Math.max(0.2, Math.min(3, delta / (1000/30)));
 
     ctx.clearRect(0,0,W,H);
 
     /* Airflow ramp. Before launch the camera is idling and water sits on
        the glass. From the moment the car goes, airflow over the housing
        builds and strips the lens clear — so `blow` drives both the wind
-       force and the fade, and the water never comes back. */
-    if (blowing && blow < 1) blow = Math.min(1, blow + 0.0075);
+       force and the fade, and the water never comes back.
+
+       This is measured in SECONDS, not frames. Counting frames meant the
+       clear took 133 of them however long they took, and since the launch is
+       also the most expensive moment to render, a measured 16.7s clear
+       against a designed 4.4s. Elapsed time cannot drift like that. */
+    if (blowing && blow < 1) blow = Math.min(1, blow + (delta/1000)/BLOW_SECONDS);
     var wet = 1 - blow;                       /* how much water remains */
     var wind = blow * blow;                   /* force ramps in, not linear */
+    var gust  = Math.max(0, 1 - blow * 2.2);  /* the close pass + whip  */
+    var chase = Math.min(1, blow * 1.35);     /* settled in, now chasing */
 
     /* One video-to-canvas blit per frame feeds every drop's refraction. */
     if (wet > 0.001) refreshSrc(currentVideo());
 
     /* lens beads — water sitting on the glass */
     if (wet > 0.001){
-      /* While nothing is moving the mist is a single blit. */
-      var mistStatic = !blowing;
-      if (mistStatic){
-        if (!mistOK) bakeMist();
-        ctx.globalAlpha = wet;
-        ctx.drawImage(mistCv, 0, 0);
-        ctx.globalAlpha = 1;
-      } else {
-        mistOK = false;
+      /* The mist stays baked even through the blow-off: instead of dropping
+         the cache and simulating ~1,350 motes individually at exactly the
+         moment the renderer is busiest, the whole layer is translated under
+         the wind and faded. Motes are one to five pixels and near-identical
+         in mass, so they are indistinguishable from individually simulated
+         ones — and this is what keeps the launch from stuttering. */
+      if (!mistOK) bakeMist();
+      if (wind > 0){
+        var mArea = 0.16;                       /* representative mist mass */
+        mistDX += wind * DPR * mArea * (0.95*gust + 0.20*chase) * k * 3.2;
+        mistDY += (0.02*DPR + wind * DPR * mArea * (0.55*chase - 0.45*gust)) * k * 3.2;
       }
+      ctx.globalAlpha = wet;
+      ctx.drawImage(mistCv, mistDX, mistDY);
+      ctx.globalAlpha = 1;
 
       for (var j=0;j<beads.length;j++){
         var b = beads[j];
-        if (mistStatic && b.mist) continue;   /* already in the baked layer */
+        if (b.mist) continue;                 /* lives in the baked layer */
         var running = !(b.hold > 0 && wind < 0.02);
 
         /* --- wet streak: a fading chain of shrinking stamps left where
@@ -1263,7 +1289,7 @@
            rather than a drawn line. Aged out from the tail forward. */
         for (var k=0;k<b.trailPts.length;k++){
           var tp = b.trailPts[k];
-          tp.age += 1;
+          tp.age += k;
           var life = 1 - tp.age / tp.life;
           if (life <= 0) continue;
           ctx.globalAlpha = b.a * wet * life * .5;
@@ -1280,9 +1306,9 @@
 
         if (!running){
           /* idling: surface tension holds it, with a faint wobble */
-          b.hold--;
-          b.wob += 0.03;
-          b.x += Math.sin(b.wob) * 0.05 * DPR;
+          b.hold -= k;
+          b.wob += 0.03 * k;
+          b.x += Math.sin(b.wob) * 0.05 * DPR * k;
         } else {
           /* Released, or torn loose by airflow. Direction here isn't
              arbitrary — it's keyed to what actually happens on screen in
@@ -1303,12 +1329,10 @@
              Larger beads catch more air either way, so they leave first
              and fastest. */
           var area = b.r / (10*DPR);
-          var gust  = Math.max(0, 1 - blow * 2.2);   /* the close pass + whip  */
-          var chase = Math.min(1, blow * 1.35);      /* settled in, now chasing */
-          b.vy += b.grav + wind * DPR * area * (0.55*chase - 0.45*gust);
-          b.vx += wind * DPR * area * (0.95*gust + 0.20*chase);
-          b.x += b.vx;
-          b.y += b.vy;
+          b.vy += (b.grav + wind * DPR * area * (0.55*chase - 0.45*gust)) * k;
+          b.vx += wind * DPR * area * (0.95*gust + 0.20*chase) * k;
+          b.x += b.vx * k;
+          b.y += b.vy * k;
 
           if (Math.sqrt(b.vx*b.vx + b.vy*b.vy) > 0.25*DPR){
             b.trailPts.push({x:b.x, y:b.y, r:b.r*0.6, age:0, life:14});
@@ -1325,7 +1349,7 @@
       }
 
       /* running drops, on top of the resting field */
-      stepRunners(wind, Math.max(0, 1 - blow*2.2), Math.min(1, blow*1.35));
+      stepRunners(k, wind, gust, chase);
       for (var q=0;q<runners.length;q++){
         if (runners[q].x < -9000) continue;
         drawRunner(runners[q], wet);
