@@ -859,7 +859,9 @@
       AX.yaw.w = ENTRY;
       stage.classList.add('started', 'dropped');
       startSpin();
-      after(2700, () => {
+      // Start the fade as the cube begins dropping, so the direction prompt is
+      // visible roughly three seconds earlier than the previous delayed cue.
+      after(0, () => {
         if (state === 'cube') stage.classList.add('hinting');
       });
     }
