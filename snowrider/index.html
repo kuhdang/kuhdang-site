@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Snowrider</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body { margin: 0; height: 100%; background: #0b0f1a; overflow: hidden; }
+      canvas { display: block; }
+
+      #start-screen {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(180deg, rgba(8, 14, 25, 0.08), rgba(5, 9, 16, 0.28));
+        cursor: pointer;
+        transition: opacity 1s ease;
+      }
+      #start-screen.leaving { opacity: 0; pointer-events: none; }
+      #start-screen__content {
+        margin-top: 24vh;
+        text-align: center;
+        color: #f6f8ff;
+        text-shadow: 0 2px 24px rgba(3, 8, 16, 0.92);
+        user-select: none;
+      }
+      #start-screen h1 {
+        margin: 0 0 18px;
+        font: 600 clamp(30px, 5vw, 62px)/1 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        letter-spacing: 0.19em;
+        text-transform: uppercase;
+      }
+      #start-screen p {
+        margin: 0;
+        font: 600 clamp(12px, 1.4vw, 16px)/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        letter-spacing: 0.28em;
+        text-transform: uppercase;
+        animation: play-pulse 1.2s ease-in-out infinite alternate;
+      }
+      @keyframes play-pulse { from { opacity: 0.3; } to { opacity: 1; } }
+
+      #hint {
+        position: fixed;
+        left: 50%;
+        bottom: 34px;
+        transform: translateX(-50%);
+        font: 500 13px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(255, 244, 230, 0.72);
+        text-shadow: 0 1px 12px rgba(0, 0, 0, 0.55);
+        pointer-events: none;
+        transition: opacity 1.8s ease 6s;
+      }
+      #hint.fade { opacity: 0; }
+      #hint b { color: #ffd9a8; font-weight: 600; }
+
+      #hud {
+        position: fixed;
+        left: 14px;
+        top: 12px;
+        padding: 9px 12px;
+        border-radius: 7px;
+        background: rgba(8, 12, 22, 0.62);
+        border: 1px solid rgba(255, 244, 230, 0.12);
+        font: 500 12px/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        color: rgba(255, 244, 230, 0.9);
+        white-space: pre;
+        pointer-events: none;
+        letter-spacing: 0.02em;
+      }
+      #hud .big { font-size: 17px; font-weight: 700; color: #ffd9a8; }
+      #hud.hidden { display: none; }
+
+      #quality {
+        position: fixed;
+        right: 18px;
+        bottom: 14px;
+        font: 500 11px/1.4 ui-monospace, "SF Mono", Menlo, monospace;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: rgba(255, 244, 230, 0.45);
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.6s ease;
+      }
+
+      #loading {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: #0b0f1a;
+        color: rgba(255, 244, 230, 0.8);
+        font: 500 13px/1.5 ui-sans-serif, system-ui, sans-serif;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        transition: opacity 0.8s ease;
+      }
+      #loading.gone { opacity: 0; pointer-events: none; }
+    </style>
+    <script type="module" crossorigin src="./assets/index-CJtTmBVW.js"></script>
+  </head>
+  <body>
+    <div id="loading">Warming the light&hellip;</div>
+    <div id="start-screen" role="button" tabindex="0" aria-label="Start Snowrider">
+      <div id="start-screen__content">
+        <h1>Snowrider</h1>
+        <p>Click to Play</p>
+      </div>
+    </div>
+    <div id="hint">
+      <b>W</b> push &nbsp;&middot;&nbsp; <b>A</b> / <b>D</b> carve &nbsp;&middot;&nbsp;
+      <b>Shift</b> boost &nbsp;&middot;&nbsp; <b>L</b> light &nbsp;&middot;&nbsp;
+      <b>[</b> <b>]</b> quality
+    </div>
+    <div id="quality"></div>
+    <div id="hud">measuring&hellip;</div>
+  </body>
+</html>
