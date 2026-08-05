@@ -1050,6 +1050,40 @@
       [...panels.children].forEach((el, i) => place(el, cellRect(i)));
     });
 
+    // Available immediately for the dedicated /home/ route. This code lives
+    // inside the cube controller so it can use its private animation state.
+    window.__cubeReturnToField = () => {
+      if (state !== 'intro') return;
+      state = 'field';
+      // The direct Home route is the finished six-box page, not the cube
+      // intro. Hide every intro-only cue so it matches the six-box screen.
+      stage.querySelector('#intro').style.display = 'none';
+      stage.querySelector('#cubeHint').style.display = 'none';
+      stage.querySelector('#coda').style.display = 'none';
+      drop.style.visibility = 'hidden';
+      const cards = window.__cubeLandingCards || [];
+      fieldTiles = cards.map((card, i) => {
+        const el = document.createElement('div');
+        el.className = `cube-tile${card.copy ? ' has-copy' : ''}`;
+        el.style.setProperty('--tile', card.color);
+        el.style.opacity = '0';
+        el.innerHTML = `${WIRE}<span class="tile-title">${card.title}</span>${card.copy ? `<span class="tile-copy">${card.copy}</span>` : ''}`;
+        el.addEventListener('click', () => selectTile(el, card));
+        place(el, cellRect(i));
+        panels.appendChild(el);
+        return el;
+      });
+      stage.classList.add('titled', 'field');
+      requestAnimationFrame(() => fieldTiles.forEach((el, i) => {
+        el.style.transition = `opacity 650ms ease ${i * 90}ms`;
+        el.style.opacity = '1';
+      }));
+      after(750, () => stage.classList.add('interactive'));
+    };
+    window.__cubeReveal = () => {
+      if (state === 'intro') reveal();
+    };
+
     sizeCube();
     paint();
   })();
@@ -1102,33 +1136,6 @@
         : card.href;
       return leaveTo(href);
     }
-
-    window.__cubeReturnToField = () => {
-      if (state !== 'intro') return;
-      state = 'field';
-      drop.style.visibility = 'hidden';
-      const cards = window.__cubeLandingCards || [];
-      fieldTiles = cards.map((card, i) => {
-        const el = document.createElement('div');
-        el.className = `cube-tile${card.copy ? ' has-copy' : ''}`;
-        el.style.setProperty('--tile', card.color);
-        el.style.opacity = '0';
-        el.innerHTML = `${WIRE}<span class="tile-title">${card.title}</span>${card.copy ? `<span class="tile-copy">${card.copy}</span>` : ''}`;
-        el.addEventListener('click', () => selectTile(el, card));
-        place(el, cellRect(i));
-        panels.appendChild(el);
-        return el;
-      });
-      stage.classList.add('titled', 'field');
-      requestAnimationFrame(() => fieldTiles.forEach((el, i) => {
-        el.style.transition = `opacity 650ms ease ${i * 90}ms`;
-        el.style.opacity = '1';
-      }));
-      after(750, () => stage.classList.add('interactive'));
-    };
-    window.__cubeReveal = () => {
-      if (state === 'intro') reveal();
-    };
     if (card.type === 'contact') {
       if (location.protocol !== 'file:') setPath('/contact');
       return showView('contact');
