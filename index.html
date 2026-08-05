@@ -522,7 +522,9 @@
     cursor: pointer;
     color: #fff;
     border-color: currentColor;
-    background: rgba(0, 0, 0, .82);
+    /* Begin as the same cool-black material as a cube face. The colour accent
+       is reserved for hover, so the face-to-rectangle handoff never flashes. */
+    background: rgba(var(--halo), .02);
     transition: color .22s ease, background .22s ease, opacity .42s ease;
   }
   #cubeStage.field #panels { pointer-events: auto; }
@@ -543,7 +545,9 @@
   #cubeStage .cube-tile.has-copy:hover { background: color-mix(in srgb, currentColor 13%, #000); }
   #cubeStage .cube-tile.has-copy:hover .tile-title { opacity: 0; transform: none; transition: none; }
   #cubeStage .cube-tile.has-copy:hover .tile-copy { opacity: 1; transform: none; transition: none; }
-  #cubeStage .cube-tile::before, #cubeStage .cube-tile::after { border-color: currentColor; }
+  /* Keep the neutral cube bloom while tiles are travelling. Accent colour only
+     appears after a deliberate hover, matching the white cube wireframe. */
+  #cubeStage .cube-tile:hover::before, #cubeStage .cube-tile:hover::after { border-color: currentColor; }
   #cubeStage .cube-tile.selecting { z-index: 5; }
   #cubeStage #cubeMessage {
     position: absolute; inset: 0; display: grid; place-items: center; padding: 12vw;
