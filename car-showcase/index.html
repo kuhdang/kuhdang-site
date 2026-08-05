@@ -6,12 +6,13 @@
 <title>911 GT3 RS</title>
 <meta name="description" content="An interactive showcase.">
 <link rel="icon" href="../favicon.png">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root{
     --ink:#f2f2f0;
     --dim:rgba(242,242,240,.55);
     --hair:rgba(242,242,240,.18);
-    --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --mono:"Space Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
     --ease:cubic-bezier(.22,.61,.36,1);
     /* Act 3 scroll distance. Tuned per input class at runtime. */
     --scrub-vh:600;
@@ -26,6 +27,8 @@
     text-rendering:optimizeLegibility;
   }
   body.locked{overflow:hidden;height:100%}
+  .portfolio-home{position:fixed;z-index:50;top:18px;left:18px;color:#fff;font:600 11px/1 var(--mono);letter-spacing:.16em;text-transform:uppercase;text-decoration:none;padding:10px 12px;border:1px solid rgba(255,255,255,.7);background:rgba(0,0,0,.36);transition:background .2s,color .2s}
+  .portfolio-home:hover{background:#fff;color:#000}
 
   /* ---------- stage ---------- */
   /* 100lvh, not dvh: immune to iOS Safari's address-bar resize, which
@@ -93,7 +96,7 @@
     left:50%; bottom:clamp(28px,7vh,64px);
     transform:translateX(-50%);
     text-align:center;
-    font-size:11px; letter-spacing:.28em; text-transform:uppercase;
+    font-size:44px; letter-spacing:.14em; text-transform:uppercase;
     color:var(--dim);
     transition:opacity .5s var(--ease);
   }
@@ -247,6 +250,7 @@
 </style>
 </head>
 <body class="locked">
+  <a class="portfolio-home" href="/home" onclick="event.preventDefault(); document.body.style.transition='opacity .7s ease'; document.body.style.opacity='0'; setTimeout(() => location.href=this.href, 700)">Home</a>
 
 <div class="stage" id="stage">
   <!-- WebM first, now carrying AV1 rather than VP9: it measures higher
@@ -279,16 +283,10 @@
 <div class="vignette"></div>
 <div id="veil"></div>
 
-<div class="ui title" id="title">
-  <b>911 GT3 RS</b>
-  <span id="subtitle">Interactive showcase</span>
-</div>
-
-<a class="ui back" href="../">← kuhdang</a>
+<a class="ui back" href="/home">← 911 GT3 RS</a>
 
 <div class="ui hint pulse" id="hint">
   Click to launch
-  <span class="k">or press space</span>
 </div>
 
 <div class="cue" id="cue">Scroll to explore</div>

@@ -6,7 +6,7 @@
 <title>work in progress</title>
 <link rel="icon" type="image/png" href="favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,wght@0,300;0,400;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root {
     color-scheme: light dark;
@@ -36,7 +36,9 @@
      fights our own explicit scroll resets during view swaps (we replace a
      very tall page with a short one right at scrollY 0). */
   html, body { overflow-anchor: none; }
-  body { background: var(--paper); color: var(--ink); font-family: 'Newsreader', serif; overflow-x: hidden; }
+  body { background: var(--paper); color: var(--ink); font-family: 'Space Mono', monospace; overflow-x: hidden; }
+  .view, .view * { font-family: 'Space Mono', monospace !important; }
+  #menuBtn, #panel, #scrim { display: none !important; }
 
   .view {
     display: none;
@@ -492,7 +494,7 @@
     margin: 0;
     text-align: center;
     font-family: var(--mono);
-    font-size: 11px;
+    font-size: 33px;
     letter-spacing: .18em;
     text-transform: uppercase;
     color: rgba(255, 255, 255, .34);
@@ -512,6 +514,51 @@
   }
   #cubeStage .cube-tile {
     will-change: left, top, width, height;
+    display: grid;
+    place-items: center;
+    overflow: hidden;
+    cursor: pointer;
+    color: #fff;
+    border-color: currentColor;
+    background: rgba(0, 0, 0, .82);
+    transition: color .22s ease, background .22s ease, opacity .42s ease;
+  }
+  #cubeStage.field #panels { pointer-events: auto; }
+  #cubeStage .cube-tile .tile-title, #cubeStage .cube-tile .tile-copy {
+    position: absolute;
+    max-width: 78%;
+    text-align: center;
+    font-family: var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    transition: opacity .65s ease, transform .28s ease;
+  }
+  #cubeStage .cube-tile .tile-title { font-size: clamp(26px, 3.6vw, 44px); color: #fff; opacity: 0; }
+  #cubeStage .cube-tile .tile-copy { font-size: clamp(10px, 1.15vw, 14px); line-height: 1.55; color: #fff; opacity: 0; transform: translateY(8px); text-transform: none; letter-spacing: .04em; }
+  #cubeStage.field .cube-tile .tile-title { opacity: 1; transition-duration: 1.25s; }
+  #cubeStage .cube-tile:hover { color: var(--tile, #fff); }
+  #cubeStage .cube-tile:hover .wire { border-color: currentColor; }
+  #cubeStage .cube-tile.has-copy:hover { background: color-mix(in srgb, currentColor 13%, #000); }
+  #cubeStage .cube-tile.has-copy:hover .tile-title { opacity: 0; transform: none; transition: none; }
+  #cubeStage .cube-tile.has-copy:hover .tile-copy { opacity: 1; transform: none; transition: none; }
+  #cubeStage .cube-tile::before, #cubeStage .cube-tile::after { border-color: currentColor; }
+  #cubeStage .cube-tile.selecting { z-index: 5; }
+  #cubeStage #cubeMessage {
+    position: absolute; inset: 0; display: grid; place-items: center; padding: 12vw;
+    color: #fff; font-family: var(--mono); font-size: clamp(20px, 4vw, 52px);
+    line-height: 1.2; letter-spacing: .04em; text-align: center; pointer-events: none;
+  }
+  #cubeStage #cubeCountdown { position: absolute; left: 50%; top: calc(50% + 1.25em); transform: translateX(-50%); color: #fff; font: inherit; font-size: 1em; letter-spacing: .04em; }
+  #cubeStage.interactive .cube-tile.has-copy .tile-title, #cubeStage.interactive .cube-tile.has-copy .tile-copy { transition: none !important; }
+
+  #view-contact.cube-contact { background: #000; color: #fff; }
+  #view-contact.cube-contact .frame { border-color: rgba(255,255,255,.22); }
+  #view-contact.cube-contact .content { color: #fff; }
+  #view-contact.cube-contact input, #view-contact.cube-contact textarea { background: #050505; color: #fff; border-color: rgba(98, 232, 153, .72); }
+  #view-contact.cube-contact button#sendBtn { background: #62e899; color: #000; }
+  #view-contact.cube-contact .contact-heading, #view-contact.cube-contact .send-note { color: #62e899; }
+  .cube-home { position: fixed; top: 18px; left: 18px; z-index: 80; color: #fff; font: 600 11px/1 var(--mono); letter-spacing: .16em; text-transform: uppercase; text-decoration: none; padding: 10px 12px; border: 1px solid rgba(255,255,255,.7); background: rgba(0,0,0,.36); }
+  .cube-home:hover { background: #fff; color: #000; }
   }
 
   /* Keeps the hamburger icon visible against the cube view's black
@@ -570,6 +617,7 @@
 
 <!-- CONTACT -->
 <div class="view panel-view" id="view-contact">
+  <a class="cube-home" href="/home" onclick="event.preventDefault(); document.body.style.transition='opacity .7s ease'; document.body.style.opacity='0'; setTimeout(() => location.href=this.href, 700)">Home</a>
   <div class="frame"></div>
   <div class="content">
     <h1 class="contact-heading">Get in touch</h1>
@@ -652,6 +700,7 @@
     let S = 180;
     let state = 'intro';   // intro -> cube -> unfolding -> field
     let raf = 0, lastT = 0;
+    let fieldTiles = [];
 
     // Two turntables sharing the cube's centroid: yaw about the vertical axis,
     // pitch about the horizontal one. Only ever one of them is live — whichever
@@ -783,7 +832,9 @@
 
       if (state === 'intro') reveal();
       else if (state === 'cube' && overCube(e.clientX, e.clientY)) unfold();
-      else if (state === 'field') reset();
+      // A tile's click event runs after pointerup. Reset only when the bare
+      // field is tapped, so it cannot steal the tile interaction first.
+      else if (state === 'field' && !e.target.closest('.cube-tile')) reset();
     });
 
     stage.addEventListener('pointercancel', () => endDrag(performance.now()));
@@ -800,12 +851,16 @@
     /* ---------- act 1: it falls in spinning, and winds down into a hover ---------- */
 
     function reveal() {
+      if (state !== 'intro') return;
       state = 'cube';
+      if (location.protocol !== 'file:') history.pushState({}, '', '/cube');
       live = 'yaw';
       AX.yaw.w = ENTRY;
       stage.classList.add('started', 'dropped');
       startSpin();
-      after(2700, () => {
+      // The prompt arrives just before the cube completes its landing, making
+      // the next interaction clear without pausing the entrance moment.
+      after(650, () => {
         if (state === 'cube') stage.classList.add('hinting');
       });
     }
@@ -867,14 +922,19 @@
 
       drop.style.visibility = 'hidden';
 
-      const tiles = from.map(r => {
+      const cards = window.__cubeLandingCards || [];
+      const tiles = from.map((r, i) => {
+        const card = cards[i] || { title: 'Idea loading..', color: '#ff4d4d' };
         const el = document.createElement('div');
-        el.className = 'cube-tile';
-        el.innerHTML = WIRE;
+        el.className = `cube-tile${card.copy ? ' has-copy' : ''}`;
+        el.style.setProperty('--tile', card.color);
+        el.innerHTML = `${WIRE}<span class="tile-title">${card.title}</span>${card.copy ? `<span class="tile-copy">${card.copy}</span>` : ''}`;
+        el.addEventListener('click', () => selectTile(el, card));
         place(el, r);
         panels.appendChild(el);
         return el;
       });
+      fieldTiles = tiles;
 
       requestAnimationFrame(() => requestAnimationFrame(() => {
         tiles.forEach((el, i) => {
@@ -884,10 +944,76 @@
         });
       }));
 
-      after(1560, () => {
+      after(1420, () => {
         state = 'field';
-        stage.classList.add('titled');
+        if (location.protocol !== 'file:') history.pushState({}, '', '/home');
+        stage.classList.add('titled', 'field');
+        after(750, () => stage.classList.add('interactive'));
       });
+    }
+
+    document.getElementById('intro').addEventListener('click', reveal);
+
+    function selectTile(tile, card) {
+      if (state !== 'field') return;
+      state = 'selecting';
+      stage.classList.remove('field');
+      // Each unselected rectangle exits in sequence before the selected one
+      // takes over the frame, echoing the portfolio's existing card transition.
+      fieldTiles.forEach((other, i) => {
+        if (other === tile) return;
+        other.style.transition = `opacity 240ms ease ${i * 75}ms`;
+        other.style.opacity = '0';
+      });
+      after(520, () => {
+        tile.classList.add('selecting');
+        tile.style.transition = 'left 520ms cubic-bezier(.22,.9,.24,1), top 520ms cubic-bezier(.22,.9,.24,1), width 520ms cubic-bezier(.22,.9,.24,1), height 520ms cubic-bezier(.22,.9,.24,1)';
+        place(tile, { left: 0, top: 0, width: innerWidth, height: innerHeight });
+        after(560, () => {
+          if (card.type === 'idea') return showIdea();
+          window.__openCubeLandingCard?.(card);
+        });
+      });
+    }
+
+    function showIdea() {
+      const message = document.createElement('p');
+      message.id = 'cubeMessage';
+      message.innerHTML = '<span></span>';
+      panels.appendChild(message);
+      const text = 'Kevin has no idea what to put here yet .. returning home';
+      let i = 0;
+      const type = () => {
+        message.firstElementChild.textContent = text.slice(0, ++i);
+        if (i < text.length) after(36, type);
+        else countdown();
+      };
+      type();
+    }
+
+    function countdown() {
+      const count = document.createElement('span');
+      count.id = 'cubeCountdown';
+      document.getElementById('cubeMessage')?.appendChild(count);
+      let n = 3;
+      const tick = () => {
+        count.textContent = n;
+        if (n-- > 1) after(700, tick);
+        else after(700, restoreField);
+      };
+      tick();
+    }
+
+    function restoreField() {
+      panels.querySelector('#cubeMessage')?.remove();
+      fieldTiles.forEach((tile, i) => {
+        tile.classList.remove('selecting');
+        tile.style.transition = `opacity 360ms ease ${i * 70}ms`;
+        tile.style.opacity = '1';
+        place(tile, cellRect(i));
+      });
+      state = 'field';
+      stage.classList.add('field');
     }
 
     /* ---------- reset ---------- */
@@ -895,7 +1021,8 @@
     function reset() {
       state = 'intro';
       clearTimers();
-      stage.classList.remove('titled');
+      stage.classList.remove('titled', 'field');
+      stage.classList.remove('interactive');
 
       [...panels.children].forEach((el, i) => {
         el.style.transition = `opacity 420ms ease ${i * 45}ms`;
@@ -957,6 +1084,57 @@
     color: 'linear-gradient(135deg, #B7C9D8 0%, #6F899B 48%, #3E596A 100%)'
   };
 
+  // The six unfolded cube faces are now the portfolio landing page.
+  window.__cubeLandingCards = [
+    { title: 'Snowboarder Game', color: '#58a6ff', href: '/snowrider/', copy: 'My attempt of creating my first game, still a work in progress.' },
+    { title: 'Porsche', color: '#58a6ff', href: '/car-showcase/', copy: "Jumped on the free 24-hour Higgsfield to create the visuals on here, not bad all I'd say." },
+    { title: 'Idea loading..', color: '#ff4d4d', type: 'idea' },
+    { title: 'Idea loading..', color: '#ff4d4d', type: 'idea' },
+    { title: 'Idea loading..', color: '#ff4d4d', type: 'idea' },
+    { title: 'Reach Out', color: '#62e899', type: 'contact' },
+  ];
+
+  window.__openCubeLandingCard = (card) => {
+    if (card.href) {
+      const local = location.protocol === 'file:';
+      const href = local
+        ? (card.href.includes('snowrider') ? 'snowrider/index.html' : 'car-showcase/index.html')
+        : card.href;
+      return leaveTo(href);
+    }
+
+    window.__cubeReturnToField = () => {
+      if (state !== 'intro') return;
+      state = 'field';
+      drop.style.visibility = 'hidden';
+      const cards = window.__cubeLandingCards || [];
+      fieldTiles = cards.map((card, i) => {
+        const el = document.createElement('div');
+        el.className = `cube-tile${card.copy ? ' has-copy' : ''}`;
+        el.style.setProperty('--tile', card.color);
+        el.style.opacity = '0';
+        el.innerHTML = `${WIRE}<span class="tile-title">${card.title}</span>${card.copy ? `<span class="tile-copy">${card.copy}</span>` : ''}`;
+        el.addEventListener('click', () => selectTile(el, card));
+        place(el, cellRect(i));
+        panels.appendChild(el);
+        return el;
+      });
+      stage.classList.add('titled', 'field');
+      requestAnimationFrame(() => fieldTiles.forEach((el, i) => {
+        el.style.transition = `opacity 650ms ease ${i * 90}ms`;
+        el.style.opacity = '1';
+      }));
+      after(750, () => stage.classList.add('interactive'));
+    };
+    window.__cubeReveal = () => {
+      if (state === 'intro') reveal();
+    };
+    if (card.type === 'contact') {
+      if (location.protocol !== 'file:') setPath('/contact');
+      return showView('contact');
+    }
+  };
+
   const gradients = [
     'linear-gradient(135deg,#DCD4C2,#B8AE97)', 'linear-gradient(135deg,#C9D2C6,#94A896)',
     'linear-gradient(135deg,#D8C9BE,#B99C87)', 'linear-gradient(135deg,#C6CDD2,#8FA0A8)',
@@ -995,11 +1173,22 @@
   // fresh load or back/forward navigation), without re-pushing the same
   // path back into history.
   function routeFromPath() {
-    const slug = location.pathname.replace(/^\/+|\/+$/g, '');
+    // A direct file:// preview has the Windows file path as pathname; treat it
+    // like the deployed site's root instead of routing it as an unknown page.
+    let slug = location.protocol === 'file:'
+      ? ''
+      : location.pathname.replace(/^\/+|\/+$/g, '');
+    if (slug === 'index.html') slug = '';
     suppressHistory = true;
     try {
-      if (!slug || slug === 'home') {
-        if (!document.getElementById('view-home').classList.contains('active')) jumpToExplore();
+      if (!slug) {
+        showView('cube');
+      } else if (slug === 'cube') {
+        showView('cube');
+        setTimeout(() => window.__cubeReveal?.(), 80);
+      } else if (slug === 'home') {
+        showView('cube');
+        setTimeout(() => window.__cubeReturnToField?.(), 80);
       } else if (slug === 'contact') {
         showView('contact');
       } else if (slug === 'dangcube') {
@@ -1100,7 +1289,8 @@
     }
     // The cube view is full-bleed black, unlike every other view's paper
     // background — the hamburger bars need to flip light to stay visible on it.
-    document.body.classList.toggle('dark-chrome', id === 'cube');
+    document.body.classList.toggle('dark-chrome', id === 'cube' || id === 'contact');
+    document.getElementById('view-contact')?.classList.toggle('cube-contact', id === 'contact');
     // Panel-views are always fixed/self-scrolling, so this only actually
     // matters when landing back on #view-home.
     if (!crossfade) window.scrollTo(0, 0);
@@ -1109,12 +1299,8 @@
   }
 
   function goHome() {
-    showView('home');
-    setPath('/home');
-    // No manual shard/visibility restoration needed — the scroll listener
-    // reassembles the shatter automatically as scrollY heads back to 0,
-    // whether from this jump or a manual scroll.
-    requestAnimationFrame(() => smoothScrollTo(0));
+    showView('cube');
+    setPath('/');
   }
 
   function goExplore() {
@@ -1427,7 +1613,7 @@
     const home = document.createElement('a');
     home.className = 'home';
     home.textContent = 'Home';
-    home.addEventListener('click', jumpToExplore);
+    home.addEventListener('click', goHome);
     nav.appendChild(home);
     const divider = document.createElement('div');
     divider.className = 'divider';
