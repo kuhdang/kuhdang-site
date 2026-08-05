@@ -855,14 +855,11 @@
     function reveal() {
       if (state !== 'intro') return;
       state = 'cube';
-      if (location.protocol !== 'file:') history.pushState({}, '', '/cube');
       live = 'yaw';
       AX.yaw.w = ENTRY;
       stage.classList.add('started', 'dropped');
       startSpin();
-      // The prompt arrives just before the cube completes its landing, making
-      // the next interaction clear without pausing the entrance moment.
-      after(650, () => {
+      after(2700, () => {
         if (state === 'cube') stage.classList.add('hinting');
       });
     }
@@ -948,7 +945,6 @@
 
       after(1420, () => {
         state = 'field';
-        if (location.protocol !== 'file:') history.pushState({}, '', '/home');
         stage.classList.add('titled', 'field');
         after(750, () => stage.classList.add('interactive'));
       });
