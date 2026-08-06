@@ -316,6 +316,9 @@
   var progBar = document.getElementById('progBar');
   var cue     = document.getElementById('cue');
   var statsEl = document.getElementById('stats');
+  // The old corner subtitle was deliberately removed from the visual design.
+  // Keep the legacy launch code safe when it tries to update that absent node.
+  function setSubtitle(text){ if (subtitle) subtitle.textContent = text; }
 
   var reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -522,7 +525,7 @@
     cueDone = true;
     cue.classList.remove('on');
     cue.classList.add('off');
-    subtitle.textContent = 'Scroll to explore';
+    setSubtitle('Scroll to explore');
   }
 
   window.addEventListener('scroll', function(){
@@ -555,7 +558,7 @@
     state = 'launch';
 
     hint.classList.add('hidden');
-    subtitle.textContent = 'Launching';
+    setSubtitle('Launching');
 
     /* The car going is what clears the lens. */
     blowing = true;
@@ -595,7 +598,7 @@
     /* The corner label stays quiet while the centre cue is up — two copies
        of the same instruction on screen at once just reads as clutter. It
        takes over once the cue has been dismissed. */
-    subtitle.textContent = '';
+    setSubtitle('');
     prog.classList.add('on');
     setTimeout(function(){ if (!cueDone) cue.classList.add('on'); }, 260);
 
