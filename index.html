@@ -486,9 +486,9 @@
     filter: blur(21px);
   }
 
-  /* ---------- hint + coda ---------- */
+  /* ---------- direction hint ---------- */
 
-  #cubeStage #cubeHint, #cubeStage #coda {
+  #cubeStage #cubeHint {
     position: absolute;
     left: 0;
     right: 0;
@@ -505,7 +505,6 @@
     pointer-events: none;
   }
   #cubeStage.hinting #cubeHint { opacity: 1; }
-  #cubeStage.titled #coda { opacity: 1; }
 
   /* ---------- tile field ---------- */
 
@@ -538,6 +537,16 @@
     transition: opacity .65s ease, transform .28s ease;
   }
   #cubeStage .cube-tile .tile-title { font-size: clamp(26px, 3.6vw, 44px); color: #fff; opacity: 0; }
+  @media (max-width: 640px) {
+    /* Mobile tiles are two columns wide; tighten this title only on small
+       screens so Snowboarder Game stays wholly inside its rectangle. */
+    #cubeStage .cube-tile .tile-title {
+      max-width: 92%;
+      font-size: clamp(18px, 4.8vw, 24px);
+      letter-spacing: .08em;
+      overflow-wrap: anywhere;
+    }
+  }
   #cubeStage .cube-tile .tile-copy { font-size: clamp(10px, 1.15vw, 14px); line-height: 1.55; color: #fff; opacity: 0; transform: translateY(8px); text-transform: none; letter-spacing: .04em; }
   #cubeStage.field .cube-tile .tile-title { opacity: 1; transition-duration: 1.25s; }
   #cubeStage .cube-tile:hover { color: var(--tile, #fff); }
@@ -675,7 +684,6 @@
     </div>
 
     <p id="cubeHint">drag any direction to turn &middot; tap the cube</p>
-    <p id="coda">tap anywhere to reset</p>
 
     <div id="panels"></div>
   </div>
@@ -838,9 +846,6 @@
 
       if (state === 'intro') reveal();
       else if (state === 'cube' && overCube(e.clientX, e.clientY)) unfold();
-      // A tile's click event runs after pointerup. Reset only when the bare
-      // field is tapped, so it cannot steal the tile interaction first.
-      else if (state === 'field' && !e.target.closest('.cube-tile')) reset();
     });
 
     stage.addEventListener('pointercancel', () => endDrag(performance.now()));
@@ -1063,7 +1068,6 @@
       // intro. Hide every intro-only cue so it matches the six-box screen.
       stage.querySelector('#intro').style.display = 'none';
       stage.querySelector('#cubeHint').style.display = 'none';
-      stage.querySelector('#coda').style.display = 'none';
       drop.style.visibility = 'hidden';
       const cards = window.__cubeLandingCards || [];
       fieldTiles = cards.map((card, i) => {
