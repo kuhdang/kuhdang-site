@@ -95,6 +95,9 @@
   .hint{
     left:50%; bottom:clamp(28px,7vh,64px);
     transform:translateX(-50%);
+    /* The prompt is visual only: tapping it must reach the stage launch
+       handler underneath instead of swallowing the user's first click. */
+    pointer-events:none;
     text-align:center;
     font-size:44px; letter-spacing:.14em; text-transform:uppercase;
     color:var(--dim);
