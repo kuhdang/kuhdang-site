@@ -9,8 +9,24 @@
       :root { color-scheme: dark; }
       html, body { margin: 0; height: 100%; background: #0b0f1a; overflow: hidden; }
       canvas { display: block; }
-      body, #start-screen, #hint, #hud, #quality, #loading, #portfolio-home { font-family: 'Space Mono', monospace !important; }
-      #portfolio-home { position: fixed; z-index: 30; top: 18px; left: 18px; color: #fff; font: 600 11px/1 ui-monospace, monospace; letter-spacing: .16em; text-transform: uppercase; text-decoration: none; padding: 10px 12px; border: 1px solid rgba(255,255,255,.7); background: rgba(0,0,0,.36); transition: background .2s, color .2s; }
+      body, #start-screen, #hint, #hud, #quality, #loading, #portfolio-home {
+        font-family: 'Space Mono', monospace !important;
+      }
+      #portfolio-home {
+        position: fixed;
+        z-index: 30;
+        top: 18px;
+        left: 18px;
+        color: #fff;
+        font: 600 11px/1 'Space Mono', ui-monospace, monospace;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+        text-decoration: none;
+        padding: 10px 12px;
+        border: 1px solid rgba(255,255,255,.7);
+        background: rgba(0,0,0,.36);
+        transition: background .2s, color .2s;
+      }
       #portfolio-home:hover { background: #fff; color: #000; }
 
       #start-screen {
@@ -105,8 +121,71 @@
         transition: opacity 0.8s ease;
       }
       #loading.gone { opacity: 0; pointer-events: none; }
+
+      /* Mobile-only game controls. Desktop keeps the existing keyboard HUD and
+         quality controls exactly as they are. */
+      #mobile-controls, #mobile-boost, #mobile-fps { display: none; }
+      @media (max-width: 700px), (hover: none) and (pointer: coarse) {
+        #hud, #quality, #hint { display: none !important; }
+        #mobile-controls {
+          position: fixed;
+          z-index: 9;
+          top: max(14px, env(safe-area-inset-top));
+          right: 14px;
+          display: grid;
+          gap: 8px;
+        }
+        .mobile-control, #mobile-boost {
+          appearance: none;
+          color: #fff;
+          font: 600 10px/1.15 'Space Mono', ui-monospace, monospace;
+          letter-spacing: .13em;
+          text-transform: uppercase;
+          text-align: center;
+          border: 1px solid rgba(255,255,255,.7);
+          background: rgba(0,0,0,.36);
+          padding: 10px 11px;
+          min-width: 112px;
+          cursor: pointer;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .mobile-control:active, #mobile-boost:active { background: #fff; color: #000; }
+        .mobile-control__value, #mobile-boost__value {
+          display: block;
+          margin-top: 5px;
+          color: rgba(255,255,255,.65);
+          font-size: 9px;
+          letter-spacing: .1em;
+        }
+        #mobile-fps {
+          position: fixed;
+          z-index: 9;
+          top: max(18px, env(safe-area-inset-top));
+          left: 50%;
+          display: block;
+          transform: translateX(-50%);
+          color: rgba(255,255,255,.72);
+          font: 600 10px/1 'Space Mono', ui-monospace, monospace;
+          letter-spacing: .12em;
+          pointer-events: none;
+        }
+        #mobile-boost {
+          position: fixed;
+          z-index: 9;
+          left: 50%;
+          bottom: max(30px, env(safe-area-inset-bottom));
+          display: block;
+          transform: translateX(-50%);
+          min-width: 156px;
+        }
+        #mobile-boost.is-on { background: rgba(255,217,168,.9); color: #080c16; border-color: #ffe4bf; }
+        #mobile-boost.is-on #mobile-boost__value { color: rgba(8,12,22,.7); }
+        #start-screen:not(.leaving) ~ #mobile-controls,
+        #start-screen:not(.leaving) ~ #mobile-boost,
+        #start-screen:not(.leaving) ~ #mobile-fps { opacity: 0; pointer-events: none; }
+      }
     </style>
-    <script type="module" crossorigin src="./assets/index-CJtTmBVW.js"></script>
+    <script type="module" crossorigin src="./assets/index-m903jg8J.js"></script>
   </head>
   <body>
     <a id="portfolio-home" href="/index.html?view=home&build=f818b9b">Home</a>
@@ -124,5 +203,17 @@
     </div>
     <div id="quality"></div>
     <div id="hud">measuring&hellip;</div>
+    <div id="mobile-fps" aria-live="polite">-- FPS</div>
+    <div id="mobile-controls" aria-label="Game settings">
+      <button class="mobile-control" id="mobile-quality" type="button">
+        Quality <span class="mobile-control__value" id="mobile-quality-value">Integrated</span>
+      </button>
+      <button class="mobile-control" id="mobile-background" type="button">
+        Background <span class="mobile-control__value" id="mobile-background-value">Pre-sunset</span>
+      </button>
+    </div>
+    <button id="mobile-boost" type="button" aria-pressed="false">
+      Tap for boost <span id="mobile-boost__value">Off</span>
+    </button>
   </body>
 </html>
