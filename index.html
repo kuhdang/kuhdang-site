@@ -538,8 +538,8 @@
   }
   #cubeStage .cube-tile .tile-title { font-size: clamp(26px, 3.6vw, 44px); color: #fff; opacity: 0; }
   @media (max-width: 640px) {
-    /* Mobile tiles are two columns wide; tighten this title only on small
-       screens so Snowboarder Game stays wholly inside its rectangle. */
+    /* Mobile tiles are two columns wide; keep the Snowboarder Demo title
+       wholly inside its rectangle. */
     #cubeStage .cube-tile .tile-title {
       max-width: 92%;
       font-size: clamp(18px, 4.8vw, 24px);
@@ -1120,7 +1120,7 @@
   // Keep this in the existing Hobbies-card position, but turn it into the
   // standalone Snowrider experience rather than adding another square.
   topics.hobbies = {
-    title: "Snowboarder Game",
+    title: "Snowboarder Demo",
     sub: [],
     href: '/snowrider/',
     color: 'linear-gradient(135deg, #B7C9D8 0%, #6F899B 48%, #3E596A 100%)'
@@ -1128,7 +1128,7 @@
 
   // The six unfolded cube faces are now the portfolio landing page.
   window.__cubeLandingCards = [
-    { title: 'Snowboarder Game', color: '#58a6ff', href: '/snowrider/', copy: 'My attempt of creating my first game, still a work in progress.' },
+    { title: 'Snowboarder Demo', color: '#58a6ff', href: '/snowrider/', copy: 'My attempt of creating my first game, still a work in progress.' },
     { title: 'Porsche', color: '#58a6ff', href: '/car-showcase/', copy: "Jumped on the free 24-hour Higgsfield to create the visuals on here, not bad all I'd say." },
     { title: 'Idea loading..', color: '#ff4d4d', type: 'idea' },
     { title: 'Idea loading..', color: '#ff4d4d', type: 'idea' },
