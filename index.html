@@ -564,6 +564,11 @@
     line-height: 1.2; letter-spacing: .04em; text-align: center; pointer-events: none;
   }
   #cubeStage #cubeCountdown { position: absolute; left: 50%; top: calc(50% + 1.25em); transform: translateX(-50%); color: #fff; font: inherit; font-size: 1em; letter-spacing: .04em; }
+  @media (max-width: 640px) {
+    /* The Idea Loading sentence wraps to three lines on a phone. Keep the
+       countdown beneath that block rather than on top of “returning home”. */
+    #cubeStage #cubeCountdown { top: calc(50% + 3.6em); }
+  }
   #cubeStage.interactive .cube-tile.has-copy .tile-title, #cubeStage.interactive .cube-tile.has-copy .tile-copy { transition: none !important; }
 
   #view-contact.cube-contact { background: #000; color: #fff; }
