@@ -108,6 +108,53 @@
         transition: opacity 0.6s ease;
       }
 
+      /* Desktop command HUD — deliberately separate from the touch-only controls below. */
+      #desktop-command-hud {
+        position: fixed;
+        z-index: 12;
+        top: 18px;
+        right: 18px;
+        display: none;
+        width: min(286px, calc(100vw - 36px));
+        box-sizing: border-box;
+        padding: 15px 15px 14px;
+        border: 1px solid rgba(255,255,255,.62);
+        background: linear-gradient(145deg, rgba(4,8,15,.80), rgba(7,12,22,.53));
+        box-shadow: 0 12px 36px rgba(0,0,0,.30), inset 0 1px rgba(255,255,255,.08);
+        color: rgba(255,255,255,.94);
+        opacity: 0;
+        transform: translateY(-8px);
+        transition: opacity .7s ease, transform .7s ease;
+        font: 600 10px/1.2 'Space Mono', ui-monospace, monospace;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+      }
+      #desktop-command-hud.is-visible { opacity: 1; transform: translateY(0); }
+      .command-hud__keys { display: grid; grid-template-columns: repeat(3, 28px); gap: 5px; width: max-content; margin: 0 auto 11px; }
+      .command-hud__key {
+        display: grid;
+        width: 28px;
+        height: 25px;
+        place-items: center;
+        border: 1px solid rgba(255,255,255,.48);
+        background: rgba(255,255,255,.05);
+        color: #fff;
+        font-size: 10px;
+        letter-spacing: 0;
+      }
+      .command-hud__key--up { grid-column: 2; }
+      .command-hud__key--boost { grid-column: 1 / -1; width: auto; height: 22px; font-size: 9px; letter-spacing: .1em; }
+      .command-hud__movement { margin: 0 0 15px; color: rgba(255,255,255,.56); font-size: 8px; text-align: center; }
+      .command-hud__section { padding-top: 12px; border-top: 1px solid rgba(255,255,255,.18); }
+      .command-hud__section + .command-hud__section { margin-top: 13px; }
+      .command-hud__heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+      .command-hud__heading span:first-child { color: rgba(255,255,255,.62); font-size: 8px; }
+      .command-hud__value { color: #fff; font-size: 10px; letter-spacing: .08em; }
+      .command-hud__shortcut { color: rgba(255,255,255,.48); font-size: 8px; white-space: nowrap; }
+      .command-hud__range { width: 100%; margin: 0; accent-color: #f4f7ff; cursor: pointer; }
+      .command-hud__scale { display: flex; justify-content: space-between; gap: 4px; margin-top: 7px; color: rgba(255,255,255,.45); font-size: 7px; letter-spacing: .03em; }
+      .command-hud__scale span.is-active { color: #fff; }
+
       #loading {
         position: fixed;
         inset: 0;
@@ -223,6 +270,22 @@
         #start-screen:not(.leaving) ~ #mobile-swipe-hint { opacity: 0; pointer-events: none; }
       }
     </style>
+    <script>
+      // The desktop build deliberately starts at the game's Low preset (index 3).
+      // Mobile retains its independent Medium default inside the game bundle.
+      (() => {
+        const mobile = matchMedia('(max-width: 700px), (hover: none) and (pointer: coarse)').matches;
+        const params = new URLSearchParams(location.search);
+        if (mobile || params.has('q')) return;
+        params.set('q', '3');
+        history.replaceState(null, '', `${location.pathname}?${params}${location.hash}`);
+        addEventListener('load', () => {
+          const clean = new URL(location.href);
+          clean.searchParams.delete('q');
+          history.replaceState(null, '', `${clean.pathname}${clean.search}${clean.hash}`);
+        }, { once: true });
+      })();
+    </script>
     <script type="module" crossorigin src="./assets/index-zjfuxYMU.js"></script>
   </head>
   <body>
@@ -241,6 +304,34 @@
     </div>
     <div id="quality"></div>
     <div id="hud">measuring&hellip;</div>
+    <aside id="desktop-command-hud" aria-label="Snowrider desktop controls">
+      <div class="command-hud__keys" aria-hidden="true">
+        <span class="command-hud__key command-hud__key--up">W</span>
+        <span class="command-hud__key">A</span>
+        <span class="command-hud__key">S</span>
+        <span class="command-hud__key">D</span>
+        <span class="command-hud__key command-hud__key--boost">Shift · Boost</span>
+      </div>
+      <p class="command-hud__movement">W Push · A / D Carve</p>
+      <section class="command-hud__section" aria-label="Quality setting">
+        <div class="command-hud__heading">
+          <span>Quality</span><output class="command-hud__value" id="desktop-quality-value">Low</output>
+          <span class="command-hud__shortcut">[ ] Change</span>
+        </div>
+        <input class="command-hud__range" id="desktop-quality" type="range" min="0" max="5" value="2" step="1" aria-label="Quality: Low" />
+        <div class="command-hud__scale" id="desktop-quality-scale" aria-hidden="true">
+          <span>Int.</span><span>Min.</span><span>Low</span><span>Med.</span><span>High</span><span>Ultra</span>
+        </div>
+      </section>
+      <section class="command-hud__section" aria-label="Day and time setting">
+        <div class="command-hud__heading">
+          <span>Day / Time</span><output class="command-hud__value" id="desktop-light-value">Golden Hour</output>
+          <span class="command-hud__shortcut">L Change</span>
+        </div>
+        <input class="command-hud__range" id="desktop-light" type="range" min="0" max="1" value="0" step="1" aria-label="Day and time: Golden Hour" />
+        <div class="command-hud__scale" id="desktop-light-scale" aria-hidden="true"><span>Golden</span><span>Alpine</span></div>
+      </section>
+    </aside>
     <div id="mobile-fps" aria-live="polite">-- FPS</div>
     <div id="mobile-controls" aria-label="Game settings">
       <button class="mobile-control" id="mobile-quality" type="button">
@@ -261,6 +352,66 @@
       </svg>
       <span>Swipe to turn</span>
     </div>
+    <script>
+      (() => {
+        const mobile = matchMedia('(max-width: 700px), (hover: none) and (pointer: coarse)').matches;
+        if (mobile) return;
+
+        const startScreen = document.getElementById('start-screen');
+        const commandHud = document.getElementById('desktop-command-hud');
+        const qualityRange = document.getElementById('desktop-quality');
+        const qualityValue = document.getElementById('desktop-quality-value');
+        const qualityScale = document.getElementById('desktop-quality-scale');
+        const lightRange = document.getElementById('desktop-light');
+        const lightValue = document.getElementById('desktop-light-value');
+        const lightScale = document.getElementById('desktop-light-scale');
+        const qualityNames = ['Integrated', 'Minimum', 'Low', 'Medium', 'High', 'Ultra'];
+        const lightNames = ['Golden Hour', 'Alpine Day'];
+        let quality = 2; // The game bundle is forced to its matching Low index (3) above.
+        let light = 0;
+
+        const key = (code) => window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+        const paint = () => {
+          qualityRange.value = String(quality);
+          qualityValue.textContent = qualityNames[quality];
+          qualityRange.setAttribute('aria-label', `Quality: ${qualityNames[quality]}`);
+          [...qualityScale.children].forEach((node, index) => node.classList.toggle('is-active', index === quality));
+          lightRange.value = String(light);
+          lightValue.textContent = lightNames[light];
+          lightRange.setAttribute('aria-label', `Day and time: ${lightNames[light]}`);
+          [...lightScale.children].forEach((node, index) => node.classList.toggle('is-active', index === light));
+        };
+        const setQuality = (next) => {
+          next = Math.max(0, Math.min(qualityNames.length - 1, next));
+          while (quality !== next) {
+            key(next > quality ? 'BracketRight' : 'BracketLeft');
+          }
+          paint();
+        };
+        const setLight = (next) => {
+          next = Math.max(0, Math.min(lightNames.length - 1, next));
+          while (light !== next) key('KeyL');
+          paint();
+        };
+
+        qualityRange.addEventListener('input', () => setQuality(Number(qualityRange.value)));
+        qualityRange.addEventListener('change', () => setQuality(Number(qualityRange.value)));
+        lightRange.addEventListener('input', () => setLight(Number(lightRange.value)));
+        lightRange.addEventListener('change', () => setLight(Number(lightRange.value)));
+        window.addEventListener('keydown', (event) => {
+          if (event.code === 'BracketLeft') quality = Math.max(0, quality - 1);
+          if (event.code === 'BracketRight') quality = Math.min(qualityNames.length - 1, quality + 1);
+          if (event.code === 'KeyL') light = (light + 1) % lightNames.length;
+          paint();
+        });
+        new MutationObserver(() => {
+          if (!startScreen.classList.contains('leaving')) return;
+          commandHud.style.display = 'block';
+          setTimeout(() => commandHud.classList.add('is-visible'), 3400);
+        }).observe(startScreen, { attributes: true, attributeFilter: ['class'] });
+        paint();
+      })();
+    </script>
     <script>
       (() => {
         const mobile = matchMedia('(max-width: 700px), (hover: none) and (pointer: coarse)');
