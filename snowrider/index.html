@@ -124,7 +124,7 @@
 
       /* Mobile-only game controls. Desktop keeps the existing keyboard HUD and
          quality controls exactly as they are. */
-      #mobile-controls, #mobile-boost, #mobile-fps { display: none; }
+      #mobile-controls, #mobile-boost, #mobile-fps, #mobile-swipe-hint { display: none; }
       @media (max-width: 700px), (hover: none) and (pointer: coarse) {
         #hud, #quality, #hint { display: none !important; }
         #mobile-controls {
@@ -180,9 +180,47 @@
         }
         #mobile-boost.is-on { background: rgba(255,217,168,.9); color: #080c16; border-color: #ffe4bf; }
         #mobile-boost.is-on #mobile-boost__value { color: rgba(8,12,22,.7); }
+        #mobile-swipe-hint {
+          position: fixed;
+          z-index: 8;
+          top: 44%;
+          left: 50%;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+          width: min(82vw, 260px);
+          transform: translate(-50%, -50%);
+          color: rgba(255,255,255,.78);
+          font: 700 clamp(11px, 3.2vw, 14px)/1 'Space Mono', ui-monospace, monospace;
+          letter-spacing: .1em;
+          white-space: nowrap;
+          text-transform: uppercase;
+          text-shadow: 0 2px 16px rgba(0,0,0,.8);
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity .7s ease;
+        }
+        #mobile-swipe-hint.is-visible { opacity: 1; }
+        #mobile-swipe-hint.is-dismissing { opacity: 0; }
+        #mobile-swipe-hint svg {
+          width: min(62vw, 210px);
+          height: auto;
+          overflow: visible;
+          filter: drop-shadow(0 2px 10px rgba(0,0,0,.72));
+        }
+        #mobile-swipe-hint path {
+          fill: none;
+          stroke: currentColor;
+          stroke-linecap: round;
+          stroke-linejoin: round;
+        }
+        #mobile-swipe-hint .swipe-arc { stroke-width: 10; opacity: .72; }
+        #mobile-swipe-hint .swipe-arrow { stroke-width: 10; opacity: .9; }
         #start-screen:not(.leaving) ~ #mobile-controls,
         #start-screen:not(.leaving) ~ #mobile-boost,
-        #start-screen:not(.leaving) ~ #mobile-fps { opacity: 0; pointer-events: none; }
+        #start-screen:not(.leaving) ~ #mobile-fps,
+        #start-screen:not(.leaving) ~ #mobile-swipe-hint { opacity: 0; pointer-events: none; }
       }
     </style>
     <script type="module" crossorigin src="./assets/index-zjfuxYMU.js"></script>
@@ -215,5 +253,57 @@
     <button id="mobile-boost" type="button" aria-pressed="false">
       Tap for boost <span id="mobile-boost__value">Off</span>
     </button>
+    <div id="mobile-swipe-hint" aria-hidden="true">
+      <svg viewBox="0 0 240 92" role="presentation" focusable="false">
+        <path class="swipe-arc" d="M42 58 C76 14, 164 14, 198 58" />
+        <path class="swipe-arrow" d="M42 58 L68 58 M42 58 L50 34" />
+        <path class="swipe-arrow" d="M198 58 L172 58 M198 58 L190 34" />
+      </svg>
+      <span>Swipe to turn</span>
+    </div>
+    <script>
+      (() => {
+        const mobile = matchMedia('(max-width: 700px), (hover: none) and (pointer: coarse)');
+        if (!mobile.matches) return;
+
+        const startScreen = document.getElementById('start-screen');
+        const hint = document.getElementById('mobile-swipe-hint');
+        if (!startScreen || !hint) return;
+
+        let shown = false;
+        let startPoint = null;
+        let dismissTimer = 0;
+
+        const dismiss = () => {
+          if (!shown || hint.classList.contains('is-dismissing')) return;
+          hint.classList.add('is-dismissing');
+          clearTimeout(dismissTimer);
+          dismissTimer = setTimeout(() => hint.remove(), 750);
+        };
+
+        const attachSwipeDismissal = () => {
+          const canvas = document.querySelector('canvas');
+          if (!canvas) return requestAnimationFrame(attachSwipeDismissal);
+
+          canvas.addEventListener('pointerdown', (event) => {
+            startPoint = { id: event.pointerId, x: event.clientX, y: event.clientY };
+          }, { passive: true });
+          canvas.addEventListener('pointermove', (event) => {
+            if (!startPoint || event.pointerId !== startPoint.id) return;
+            if (Math.hypot(event.clientX - startPoint.x, event.clientY - startPoint.y) >= 12) dismiss();
+          }, { passive: true });
+          canvas.addEventListener('pointerup', () => { startPoint = null; }, { passive: true });
+          canvas.addEventListener('pointercancel', () => { startPoint = null; }, { passive: true });
+        };
+
+        new MutationObserver(() => {
+          if (shown || !startScreen.classList.contains('leaving')) return;
+          shown = true;
+          setTimeout(() => hint.classList.add('is-visible'), 3400);
+        }).observe(startScreen, { attributes: true, attributeFilter: ['class'] });
+
+        attachSwipeDismissal();
+      })();
+    </script>
   </body>
 </html>
