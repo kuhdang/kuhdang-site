@@ -126,6 +126,7 @@
     transition:color .3s;
   }
   .back:hover{color:var(--ink)}
+  .mobile-model,.mobile-loader{display:none}
 
   /* ---------- stats ---------- */
   .stat{
@@ -246,6 +247,40 @@
   }
   #veil.lift{opacity:0}
 
+  /* ---------- mobile launch treatment ---------- */
+  @media (max-width:700px), (hover:none) and (pointer:coarse){
+    /* Desktop keeps the original top-right Home link. On a phone the model
+       name is informational only — no arrow and no accidental navigation. */
+    .back{display:none}
+    .mobile-model{
+      display:block; position:fixed; z-index:10;
+      top:max(18px,env(safe-area-inset-top)); right:max(16px,env(safe-area-inset-right));
+      color:var(--dim); font:500 10px/1.2 var(--mono);
+      letter-spacing:.22em; text-transform:uppercase;
+    }
+    .hint{
+      bottom:max(34px,calc(env(safe-area-inset-bottom) + 18px));
+      font-size:clamp(20px,6.1vw,27px); letter-spacing:.12em;
+    }
+    .hint.pulse{animation:mobile-launch-pulse 1.45s ease-in-out infinite}
+    @keyframes mobile-launch-pulse{0%,100%{opacity:.35}50%{opacity:1}}
+
+    .mobile-loader{
+      position:fixed; z-index:15; left:50%; top:50%;
+      width:min(66vw,300px); height:8px;
+      transform:translate(-50%,-50%); opacity:0;
+      border:1px solid rgba(255,255,255,.92);
+      background:#000; pointer-events:none;
+      transition:opacity .22s ease;
+    }
+    .mobile-loader__fill{display:block;width:0;height:100%;background:#fff}
+    .mobile-loader.is-active{opacity:1}
+    .mobile-loader.is-active.is-filling .mobile-loader__fill{animation:mobile-load 3.4s cubic-bezier(.2,.7,.2,1) forwards}
+    .mobile-loader.is-ready .mobile-loader__fill{width:100%;animation:none;transition:width .14s linear}
+    .mobile-loader.is-fading{opacity:0}
+    @keyframes mobile-load{0%{width:0}75%{width:76%}100%{width:92%}}
+  }
+
   @media (prefers-reduced-motion:reduce){
     .pulse{animation:none}
     .stat{transition:opacity .2s linear;transform:none}
@@ -285,8 +320,10 @@
 <canvas id="fxg"></canvas>
 <div class="vignette"></div>
 <div id="veil"></div>
+<div class="mobile-loader" id="mobileLoader" aria-hidden="true"><i class="mobile-loader__fill"></i></div>
 
 <a class="ui back" href="/index.html?view=home&build=f818b9b">← 911 GT3 RS</a>
+<div class="ui mobile-model" aria-label="911 GT3 RS">911 GT3 RS</div>
 
 <div class="ui hint pulse" id="hint">
   Click to launch
@@ -360,6 +397,31 @@
      through film instead of jumping between positions.
      ============================================================ */
   var isTouch = matchMedia('(hover:none)').matches || ('ontouchstart' in window);
+  var mobileExperience = matchMedia('(max-width:700px), (hover:none) and (pointer:coarse)').matches;
+  var mobileLoader = document.getElementById('mobileLoader');
+  var mobileLoaderTimer = 0;
+
+  function endMobilePageLoader(){
+    if (!mobileLoader || !mobileLoader.classList.contains('is-active')) return;
+    clearTimeout(mobileLoaderTimer);
+    mobileLoader.classList.add('is-ready');
+    mobileLoader.classList.remove('is-filling');
+    setTimeout(function(){ mobileLoader.classList.add('is-fading'); }, 100);
+    setTimeout(function(){ mobileLoader.className = 'mobile-loader'; }, 380);
+  }
+
+  function beginMobilePageLoader(){
+    if (!mobileExperience || !mobileLoader) return;
+    mobileLoader.className = 'mobile-loader is-active';
+    requestAnimationFrame(function(){ mobileLoader.classList.add('is-filling'); });
+    /* `loadeddata` is the first reliable signal that the opening loop has a
+       decoded frame to paint. The timeout is only a safety net for a failed
+       video, so visitors are never left behind an indeterminate loader. */
+    vLoop.addEventListener('loadeddata', endMobilePageLoader, {once:true});
+    vLoop.addEventListener('playing', endMobilePageLoader, {once:true});
+    if (vLoop.readyState >= 2) requestAnimationFrame(endMobilePageLoader);
+    mobileLoaderTimer = setTimeout(endMobilePageLoader, 7000);
+  }
 
   var FPS = 24;                 /* all three acts are encoded at 24fps */
   var frameCount = 0;
@@ -1402,6 +1464,7 @@
      BOOT
      ============================================================ */
   function boot(){
+    beginMobilePageLoader();
     sizeFx();
     bakeGrain();
     if (!reduced) requestAnimationFrame(drawFx);
