@@ -158,8 +158,11 @@
       #loading {
         position: fixed;
         inset: 0;
+        z-index: 40;
         display: grid;
         place-items: center;
+        align-content: center;
+        gap: 9px;
         background: #0b0f1a;
         color: rgba(255, 244, 230, 0.8);
         font: 500 13px/1.5 ui-sans-serif, system-ui, sans-serif;
@@ -168,6 +171,8 @@
         transition: opacity 0.8s ease;
       }
       #loading.gone { opacity: 0; pointer-events: none; }
+      #loading.is-warming { opacity: 1; pointer-events: auto; }
+      #loading__detail { color: rgba(255,244,230,.5); font-size: 9px; letter-spacing: .14em; }
 
       /* Mobile-only game controls. Desktop keeps the existing keyboard HUD and
          quality controls exactly as they are. */
@@ -290,7 +295,10 @@
   </head>
   <body>
     <a id="portfolio-home" href="/index.html?view=home&build=f818b9b">Home</a>
-    <div id="loading">Warming the light&hellip;</div>
+    <div id="loading" role="status" aria-live="polite">
+      <span id="loading__title">Preparing Snowrider</span>
+      <span id="loading__detail">Warming the mountain&hellip;</span>
+    </div>
     <div id="start-screen" role="button" tabindex="0" aria-label="Start Snowrider">
       <div id="start-screen__content">
         <h1>Snowrider</h1>
@@ -352,6 +360,64 @@
       </svg>
       <span>Swipe to turn</span>
     </div>
+    <script>
+      (() => {
+        const loader = document.getElementById('loading');
+        const title = document.getElementById('loading__title');
+        const detail = document.getElementById('loading__detail');
+        const mobile = matchMedia('(max-width: 700px), (hover: none) and (pointer: coarse)').matches;
+        if (!loader || !title || !detail) return;
+
+        // The game hides its loader as soon as the Low preset is ready. Keep it
+        // on screen briefly on desktop while the remaining presets are compiled.
+        loader.classList.add('is-warming');
+        let started = false;
+        const release = () => {
+          title.textContent = 'Ready';
+          detail.textContent = 'Low preset selected';
+          setTimeout(() => {
+            loader.classList.remove('is-warming');
+            loader.classList.add('gone');
+          }, 320);
+        };
+        const warmDesktopPresets = () => {
+          if (started) return;
+          started = true;
+          if (mobile) { release(); return; }
+
+          const steps = [
+            ['Low', null, '1 / 6'],
+            ['Medium', 'BracketRight', '2 / 6'],
+            ['High', 'BracketRight', '3 / 6'],
+            ['Ultra', 'BracketRight', '4 / 6'],
+            ['High', 'BracketLeft', 'rebalancing'],
+            ['Medium', 'BracketLeft', 'rebalancing'],
+            ['Low', 'BracketLeft', 'rebalancing'],
+            ['Minimum', 'BracketLeft', '5 / 6'],
+            ['Integrated', 'BracketLeft', '6 / 6'],
+            ['Minimum', 'BracketRight', 'restoring Low'],
+            ['Low', 'BracketRight', 'ready']
+          ];
+          let index = 0;
+          const next = () => {
+            const [name, code, progress] = steps[index];
+            title.textContent = `Calibrating ${name}`;
+            detail.textContent = `Quality profile ${progress}`;
+            if (code) window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+            index += 1;
+            // Rebuilding a terrain tier releases sizeable GPU buffers. Giving the
+            // renderer time to settle here prevents an unsafe memory spike on
+            // the first visit and keeps the subsequent in-game changes smooth.
+            if (index < steps.length) setTimeout(next, 1700);
+            else release();
+          };
+          requestAnimationFrame(() => setTimeout(next, 120));
+        };
+        new MutationObserver(() => {
+          if (loader.classList.contains('gone')) warmDesktopPresets();
+        }).observe(loader, { attributes: true, attributeFilter: ['class'] });
+      })();
+    </script>
     <script>
       (() => {
         const mobile = matchMedia('(max-width: 700px), (hover: none) and (pointer: coarse)').matches;
