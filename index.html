@@ -505,6 +505,11 @@
     pointer-events: none;
   }
   #cubeStage.hinting #cubeHint { opacity: 1; }
+  @media (max-width: 640px) {
+    /* Keep the cube instruction readable without competing with the cube on a
+       phone. Desktop retains its original display size. */
+    #cubeStage #cubeHint { font-size: clamp(16px, 5vw, 20px); letter-spacing: .1em; }
+  }
 
   /* ---------- tile field ---------- */
 
@@ -537,6 +542,14 @@
     transition: opacity .65s ease, transform .28s ease;
   }
   #cubeStage .cube-tile .tile-title { font-size: clamp(26px, 3.6vw, 44px); color: #fff; opacity: 0; }
+  #cubeStage .idea-loading-dots { display: inline-flex; width: 1.9em; letter-spacing: 0; white-space: nowrap; }
+  #cubeStage .idea-loading-dots i { width: .63em; font: inherit; font-style: normal; opacity: 0; }
+  #cubeStage .idea-loading-dots i:nth-child(1) { animation: cube-loading-dot-one 1.8s linear infinite; }
+  #cubeStage .idea-loading-dots i:nth-child(2) { animation: cube-loading-dot-two 1.8s linear infinite; }
+  #cubeStage .idea-loading-dots i:nth-child(3) { animation: cube-loading-dot-three 1.8s linear infinite; }
+  @keyframes cube-loading-dot-one { 0%, 9%, 80%, 100% { opacity: 0; } 10%, 79% { opacity: 1; } }
+  @keyframes cube-loading-dot-two { 0%, 31%, 80%, 100% { opacity: 0; } 32%, 79% { opacity: 1; } }
+  @keyframes cube-loading-dot-three { 0%, 53%, 80%, 100% { opacity: 0; } 54%, 79% { opacity: 1; } }
   @media (max-width: 640px) {
     /* Mobile tiles are two columns wide; keep the Snowboarder Demo title
        wholly inside its rectangle. */
@@ -931,6 +944,13 @@
       el.style.height = r.height + 'px';
     }
 
+    function applyIdeaLoadingTitle(el, card) {
+      if (card.type !== 'idea') return;
+      const title = el.querySelector('.tile-title');
+      if (!title) return;
+      title.innerHTML = 'Idea loading<span class="idea-loading-dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span>';
+    }
+
     function toField() {
       // read where each face actually sits on screen, then grow it into its cell
       const from = ORDER.map(sel => cube.querySelector(sel).getBoundingClientRect());
@@ -939,7 +959,7 @@
 
       const cards = window.__cubeLandingCards || [];
       const tiles = from.map((r, i) => {
-        const card = cards[i] || { title: 'Idea loading..', color: '#ff4d4d' };
+        const card = cards[i] || { title: 'Idea loading', color: '#ff4d4d', type: 'idea' };
         const el = document.createElement('div');
         el.className = `cube-tile${card.copy ? ' has-copy' : ''}`;
         el.style.setProperty('--tile', card.color);
@@ -947,6 +967,7 @@
         el.addEventListener('click', () => selectTile(el, card));
         place(el, r);
         panels.appendChild(el);
+        applyIdeaLoadingTitle(el, card);
         return el;
       });
       fieldTiles = tiles;
@@ -1084,6 +1105,7 @@
         el.addEventListener('click', () => selectTile(el, card));
         place(el, cellRect(i));
         panels.appendChild(el);
+        applyIdeaLoadingTitle(el, card);
         return el;
       });
       stage.classList.add('titled', 'field');
@@ -1135,9 +1157,9 @@
   window.__cubeLandingCards = [
     { title: 'Snowboarder Demo', color: '#58a6ff', href: '/snowrider/', copy: 'My attempt of creating my first game, still a work in progress.' },
     { title: 'Porsche', color: '#58a6ff', href: '/car-showcase/', copy: "Jumped on the free 24-hour Higgsfield to create the visuals on here, not bad all I'd say." },
-    { title: 'Idea loading..', color: '#ff4d4d', type: 'idea' },
-    { title: 'Idea loading..', color: '#ff4d4d', type: 'idea' },
-    { title: 'Idea loading..', color: '#ff4d4d', type: 'idea' },
+    { title: 'Idea loading', color: '#ff4d4d', type: 'idea' },
+    { title: 'Idea loading', color: '#ff4d4d', type: 'idea' },
+    { title: 'Idea loading', color: '#ff4d4d', type: 'idea' },
     { title: 'Reach Out', color: '#62e899', type: 'contact' },
   ];
 
