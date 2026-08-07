@@ -264,9 +264,12 @@
     }
     .hint.pulse{animation:mobile-launch-pulse 1.45s ease-in-out infinite}
     @keyframes mobile-launch-pulse{0%,100%{opacity:.35}50%{opacity:1}}
+    /* The launch affordance is deliberately unavailable until the opening
+       loop has both a decoded frame and active playback. */
+    body:not(.loop-video-ready) .hint{opacity:0!important;animation:none!important}
 
     .mobile-loader{
-      position:fixed; z-index:15; left:50%; top:50%;
+      display:block; position:fixed; z-index:15; left:50%; top:50%;
       width:min(66vw,300px); height:8px;
       transform:translate(-50%,-50%); opacity:0;
       border:1px solid rgba(255,255,255,.92);
@@ -399,11 +402,11 @@
   var isTouch = matchMedia('(hover:none)').matches || ('ontouchstart' in window);
   var mobileExperience = matchMedia('(max-width:700px), (hover:none) and (pointer:coarse)').matches;
   var mobileLoader = document.getElementById('mobileLoader');
-  var mobileLoaderTimer = 0;
+  var veil = document.getElementById('veil');
+  var loopVideoReady = false;
 
   function endMobilePageLoader(){
     if (!mobileLoader || !mobileLoader.classList.contains('is-active')) return;
-    clearTimeout(mobileLoaderTimer);
     mobileLoader.classList.add('is-ready');
     mobileLoader.classList.remove('is-filling');
     setTimeout(function(){ mobileLoader.classList.add('is-fading'); }, 100);
@@ -414,14 +417,26 @@
     if (!mobileExperience || !mobileLoader) return;
     mobileLoader.className = 'mobile-loader is-active';
     requestAnimationFrame(function(){ mobileLoader.classList.add('is-filling'); });
-    /* `loadeddata` is the first reliable signal that the opening loop has a
-       decoded frame to paint. The timeout is only a safety net for a failed
-       video, so visitors are never left behind an indeterminate loader. */
-    vLoop.addEventListener('loadeddata', endMobilePageLoader, {once:true});
-    vLoop.addEventListener('playing', endMobilePageLoader, {once:true});
-    if (vLoop.readyState >= 2) requestAnimationFrame(endMobilePageLoader);
-    mobileLoaderTimer = setTimeout(endMobilePageLoader, 7000);
   }
+
+  /* A decoded frame alone is not enough: on mobile, the prompt must wait
+     until that frame is actually being played on screen. The loader is the
+     only thing allowed over the black veil until this gate opens. */
+  function revealLoopWhenLive(){
+    if (loopVideoReady || vLoop.readyState < 2 || vLoop.paused) return;
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){
+      if (loopVideoReady || vLoop.readyState < 2 || vLoop.paused) return;
+      loopVideoReady = true;
+      document.body.classList.add('loop-video-ready');
+      endMobilePageLoader();
+      veil && veil.classList.add('lift');
+    }); });
+  }
+
+  vLoop.addEventListener('loadeddata', revealLoopWhenLive);
+  vLoop.addEventListener('canplay', revealLoopWhenLive);
+  vLoop.addEventListener('playing', revealLoopWhenLive);
+  beginMobilePageLoader();
 
   var FPS = 24;                 /* all three acts are encoded at 24fps */
   var frameCount = 0;
@@ -612,11 +627,12 @@
   function startLoop(){
     show(vLoop);
     var p = vLoop.play();
-    if (p && p.catch) p.catch(function(){});
+    if (p && p.then) p.then(revealLoopWhenLive).catch(function(){});
+    else revealLoopWhenLive();
   }
 
   function launch(){
-    if (state !== 'loop') return;
+    if (state !== 'loop' || (mobileExperience && !loopVideoReady)) return;
     state = 'launch';
 
     hint.classList.add('hidden');
@@ -1464,26 +1480,14 @@
      BOOT
      ============================================================ */
   function boot(){
-    beginMobilePageLoader();
     sizeFx();
     bakeGrain();
     if (!reduced) requestAnimationFrame(drawFx);
     startLoop();
 
-    /* Lift the veil only once the loop has a frame to show, so we never
-       dissolve from black to black. The poster covers the gap if the video
-       is slow, and a timeout guarantees we never strand the visitor behind
-       an opaque screen if it fails outright. */
-    var veil = document.getElementById('veil');
-    var lifted = false;
-    function lift(){
-      if (lifted) return;
-      lifted = true;
-      requestAnimationFrame(function(){ veil.classList.add('lift'); });
-    }
-    if (vLoop.readyState >= 2) lift();
-    else vLoop.addEventListener('loadeddata', lift, {once:true});
-    setTimeout(lift, 1800);
+    /* The veil lifts only through revealLoopWhenLive(), never on a blind
+       timeout, so a slow phone sees the loading bar rather than blank UI. */
+    revealLoopWhenLive();
 
     /* Refraction needs vLoop's natural size, which isn't known until it
        has data — sizeFx() above likely ran before that, so recompute the
