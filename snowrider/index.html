@@ -259,6 +259,9 @@
           min-width: 112px;
           cursor: pointer;
           -webkit-tap-highlight-color: transparent;
+          touch-action: manipulation;
+          -webkit-user-select: none;
+          user-select: none;
         }
         .mobile-control:active, #mobile-boost:active { background: #fff; color: #000; }
         .mobile-control__value, #mobile-boost__value {
@@ -537,6 +540,51 @@
           setTimeout(() => commandHud.classList.add('is-visible'), 3400);
         }).observe(startScreen, { attributes: true, attributeFilter: ['class'] });
         paint();
+      })();
+    </script>
+    <script>
+      (() => {
+        // Mobile steering captures one pointer on the canvas. Triggering these
+        // controls on a second finger's touch-down lets that steering pointer
+        // continue uninterrupted instead of waiting for a completed tap.
+        const mobile = matchMedia('(max-width: 700px), (hover: none) and (pointer: coarse)');
+        if (!mobile.matches) return;
+
+        const controls = [
+          document.getElementById('mobile-quality'),
+          document.getElementById('mobile-background'),
+          document.getElementById('mobile-boost')
+        ];
+
+        controls.forEach((control) => {
+          if (!control) return;
+
+          let dispatchingImmediateClick = false;
+          let suppressFollowUpClick = false;
+          control.dataset.multitouchReady = 'true';
+
+          control.addEventListener('pointerdown', (event) => {
+            if (event.pointerType === 'mouse') return;
+
+            // Run the existing click action immediately, without changing the
+            // canvas pointer capture that is maintaining the turn.
+            event.preventDefault();
+            event.stopPropagation();
+            dispatchingImmediateClick = true;
+            control.click();
+            dispatchingImmediateClick = false;
+            suppressFollowUpClick = true;
+            setTimeout(() => { suppressFollowUpClick = false; }, 500);
+          }, { capture: true, passive: false });
+
+          // A browser may still emit a click after pointerdown. Ignore that
+          // follow-up so one tap always performs exactly one action.
+          control.addEventListener('click', (event) => {
+            if (dispatchingImmediateClick || !suppressFollowUpClick) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }, { capture: true });
+        });
       })();
     </script>
     <script>
