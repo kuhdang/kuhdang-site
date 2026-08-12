@@ -353,7 +353,7 @@
         }, { once: true });
       })();
     </script>
-    <script type="module" crossorigin src="./assets/index-zjfuxYMU.js?build=smiling-grey-box"></script>
+    <script type="module" crossorigin src="./assets/index-zjfuxYMU.js?build=night-moon-stars"></script>
   </head>
   <body>
     <a id="portfolio-home" href="/index.html?view=home&build=f818b9b">Home</a>
@@ -392,11 +392,11 @@
       </section>
       <section class="command-hud__section" aria-label="Day and time setting">
         <div class="command-hud__heading">
-          <span>Day / Time</span><output class="command-hud__value" id="desktop-light-value">Golden Hour</output>
+          <span>Day / Time</span><output class="command-hud__value" id="desktop-light-value">Pre-sunset</output>
           <span class="command-hud__shortcut">L Change</span>
         </div>
-        <input class="command-hud__range" id="desktop-light" type="range" min="0" max="1" value="0" step="1" aria-label="Day and time: Golden Hour" />
-        <div class="command-hud__scale" id="desktop-light-scale" aria-hidden="true"><span>Golden</span><span>Alpine</span></div>
+        <input class="command-hud__range" id="desktop-light" type="range" min="0" max="4" value="2" step="1" aria-label="Day and time: Pre-sunset" />
+        <div class="command-hud__scale" id="desktop-light-scale" aria-hidden="true"><span>Golden</span><span>Alpine</span><span>Pre</span><span>Morning</span><span>Night</span></div>
       </section>
     </aside>
     <div id="quality-transition" aria-hidden="true">
@@ -449,9 +449,9 @@
         const transitionApply = document.getElementById('quality-transition__apply');
         const transitionReady = document.getElementById('quality-transition__ready');
         const qualityNames = ['Integrated', 'Minimum', 'Low', 'Medium', 'High', 'Ultra'];
-        const lightNames = ['Golden Hour', 'Alpine Day'];
+        const lightNames = ['Golden Hour', 'Alpine Day', 'Pre-sunset', 'Morning', 'Night'];
         let quality = 2; // The game bundle is forced to its matching Low index (3) above.
-        let light = 0;
+        let light = 2;
         let applyingQuality = false;
         let queuedQuality = null;
         let qualityTimer = 0;
