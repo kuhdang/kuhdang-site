@@ -360,6 +360,33 @@
     transition: opacity 320ms ease, transform 520ms cubic-bezier(.4, 0, .2, 1);
     cursor: pointer;
   }
+  /* Mobile-only escape hatch off the "Click me" landing — jumps straight to
+     the six-tile field instead of making the visitor sit through the cube's
+     drop/unfold reveal. Desktop is left alone since a mouse click on the
+     intro text gets there almost as fast anyway. */
+  #cubeStage .skip-menu-btn { display: none; }
+  @media (max-width: 640px) {
+    #cubeStage .skip-menu-btn {
+      display: block;
+      position: absolute;
+      top: 24px;
+      left: 20px;
+      z-index: 10;
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #FFFFFF;
+      background: none;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      border-radius: 999px;
+      padding: 8px 14px;
+      cursor: pointer;
+      transition: opacity 320ms ease;
+    }
+    #cubeStage .skip-menu-btn:active { border-color: #FFFFFF; }
+    #cubeStage.started .skip-menu-btn { opacity: 0; pointer-events: none; }
+  }
   #cubeStage.started #intro {
     opacity: 0;
     transform: scale(.97);
@@ -681,6 +708,7 @@
 <!-- CUBE ("dangcube") -->
 <div class="view panel-view" id="view-cube">
   <div id="cubeStage">
+    <button class="skip-menu-btn" id="skipMenuBtn" type="button">Skip to menu</button>
     <p id="intro" onclick="window.__cubeReveal && window.__cubeReveal()">Click me<span>.</span><span>.</span><span class="blip">.</span></p>
 
     <div id="scene">
@@ -1119,6 +1147,20 @@
     window.__cubeReveal = () => {
       if (state === 'intro') reveal();
     };
+
+    // "Skip to menu" tap target sits on top of the intro/cube pointer
+    // handlers above — stop every pointer event from bubbling to `stage` so
+    // tapping it can never also be read as the tap-the-cube gesture.
+    const skipBtn = document.getElementById('skipMenuBtn');
+    if (skipBtn) {
+      ['pointerdown', 'pointermove', 'pointerup', 'click'].forEach(type => {
+        skipBtn.addEventListener(type, e => e.stopPropagation());
+      });
+      skipBtn.addEventListener('click', () => {
+        skipBtn.style.display = 'none';
+        window.__cubeReturnToField();
+      });
+    }
 
     sizeCube();
     paint();
